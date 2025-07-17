@@ -28,10 +28,10 @@ export default function ComboBox({ items, itemLabelKey, itemIdKey, selectedItem,
   return (
       <Combobox value={selectedItem} onChange={setSelectedItem} >
         <div className="relative mt-1">
-          <div className="relative w-full cursor-default rounded-md border-1 border-gray-300 bg-white text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+          <div className="relative w-full cursor-default rounded-md border border-gray-300 bg-white text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
             <Combobox.Input
               style={{borderRadius: '0.375rem'}}
-              className="w-full border-1 border-gray-300 rounded-md py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
+              className="w-full border border-gray-300 rounded-md py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
               displayValue={(item: any) => item[itemLabelKey]}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -49,7 +49,7 @@ export default function ComboBox({ items, itemLabelKey, itemIdKey, selectedItem,
             leaveTo="opacity-0"
             afterLeave={() => setQuery('')}
           >
-            <Combobox.Options style={{zIndex:1000}} className="z-100 absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+            <Combobox.Options style={{zIndex:1000}} className="z-100 absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-hidden sm:text-sm">
               {items.length === 0 && query !== '' ? (
                 <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
                   Nothing found.

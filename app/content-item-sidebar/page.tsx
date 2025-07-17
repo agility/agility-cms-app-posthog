@@ -1,18 +1,63 @@
 "use client"
 
 import { useAgilityAppSDK, contentItemMethods } from "@agility/app-sdk"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Checkbox, Button } from "@agility/plenum-ui"
 import "@agility/plenum-ui/lib/tailwind.css"
-
+import { PostHogSidebar } from "@/components/PostHogSidebar"
+import Loader from "@/components/Loader"
+import "@/styles/globals.css"
+import { IAgilityContentItem } from "@/types/IAgilityContentItem"
 
 const Page = () => {
+
+	const { appInstallContext, contentItem, contentModel, locale, initializing } = useAgilityAppSDK()
+	const item = contentItem as IAgilityContentItem | null
+
+	const [experimentKey, setExperimentKey] = useState<string | null>(item?.values?.ExperimentKey || null)
+	const postHogAPIKey = useMemo(() => {
+		return appInstallContext?.configuration?.POSTHOG_API_KEY || null
+	}, [appInstallContext?.configuration?.POSTHOG_API_KEY])
+
+
+	const postHogProjectId = useMemo(() => {
+		return appInstallContext?.configuration?.POSTHOG_PROJECT_ID || null
+	}, [appInstallContext?.configuration?.POSTHOG_PROJECT_ID])
+
+	useEffect(() => {
+
+
+		console.log("postHogAPIKey ", postHogAPIKey, "postHogProjectId", postHogProjectId)
+
+		const currentExperimentKey = item?.values?.ExperimentKey
+		setExperimentKey(currentExperimentKey)
+
+		contentItemMethods.addFieldListener({
+			fieldName: "ExperimentKey",
+			onChange: (value) => {
+				//when the ExperimentKey field changes, update the state
+				console.log("ExperimentKey changed: ", !!value)
+				setExperimentKey(value)
+			}
+		});
+
+		() => {
+			contentItemMethods.removeFieldListener({ fieldName: "ExperimentKey" })
+		}
+
+	}, [postHogAPIKey, postHogProjectId, item?.values?.ExperimentKey])
+
+
+
+
 	return (<html>
 		<head>
 			<title>Content Item Sidebar</title>
 		</head>
 		<body>
-			<h1>Content Item Sidebar</h1>
+			{initializing ? <Loader /> : experimentKey && postHogProjectId && postHogAPIKey ? (
+				<PostHogSidebar {...{ experimentKey, postHogAPIKey, postHogProjectId }} />
+			) : <div>This content item does not have an Experiment Key.</div>}
 		</body>
 	</html>)
 }

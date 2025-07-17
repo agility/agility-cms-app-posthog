@@ -9,6 +9,11 @@
 			"label": "PostHog API Key",
 			"name": "POSTHOG_API_KEY",
 			"type": "string"
+		},
+		{
+			"label": "PostHog Project ID",
+			"name": "POSTHOG_PROJECT_ID",
+			"type": "string"
 		}
 	],
 	"capabilities": {
