@@ -1,0 +1,32 @@
+{
+	"name": "Google Translate",
+	"documentationLink": "https://github.com/agility/agility-cms-apps/tree/main/google-analytics",
+	"description": "Translate your content with Google Translate.",
+	"version": "1.0.0",
+	"__sdkVersion": "2.0.0",
+	"configValues": [
+		{
+			"label": "Google Cloud Project ID",
+			"name": "GC_PROJECT_ID",
+			"type": "string"
+		},
+		{
+			"label": "Google Cloud Account Email",
+			"name": "GC_EMAIL",
+			"type": "string"
+		},
+		{
+			"label": "Google Cloud Private Key",
+			"name": "GC_PRIVATE_KEY",
+			"type": "string"
+		}
+	],
+	"capabilities": {
+
+		"contentItemSidebar": {
+			"description": "Translate fields for the content item."
+		},
+		"installScreen": false
+
+	}
+}
