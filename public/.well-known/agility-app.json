@@ -1,32 +1,20 @@
 {
-	"name": "Google Translate",
-	"documentationLink": "https://github.com/agility/agility-cms-apps/tree/main/google-analytics",
-	"description": "Translate your content with Google Translate.",
+	"name": "PostHog",
+	"documentationLink": "https://agilitycms.com/docs/apps/posthog",
+	"description": "Connect to your PostHog instance for A/B testing.",
 	"version": "1.0.0",
 	"__sdkVersion": "2.0.0",
 	"configValues": [
 		{
-			"label": "Google Cloud Project ID",
-			"name": "GC_PROJECT_ID",
-			"type": "string"
-		},
-		{
-			"label": "Google Cloud Account Email",
-			"name": "GC_EMAIL",
-			"type": "string"
-		},
-		{
-			"label": "Google Cloud Private Key",
-			"name": "GC_PRIVATE_KEY",
+			"label": "PostHog API Key",
+			"name": "POSTHOG_API_KEY",
 			"type": "string"
 		}
 	],
 	"capabilities": {
-
 		"contentItemSidebar": {
-			"description": "Translate fields for the content item."
+			"description": "For A/B testing."
 		},
 		"installScreen": false
-
 	}
 }

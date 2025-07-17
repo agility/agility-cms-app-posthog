@@ -1,14 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-
-* {
-  /* set the default outline color on focus */
-  outline-color: #7933dd;
-
-}
-
-#__next {
-    height: 100%;
-  }
