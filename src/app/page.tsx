@@ -3,7 +3,7 @@
 export default function Page() {
 
 	return (
-		<main className="m-10 bg-gray-500">
+		<main className="m-10 ">
 			<h1 className="text-3xl font-bold">PostHog app for Agility</h1>
 			<p>This app provides PostHog capabilities to Agility.</p>
 			<p>
