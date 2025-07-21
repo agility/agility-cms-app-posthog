@@ -3,10 +3,10 @@
 import { useAgilityAppSDK, contentItemMethods } from "@agility/app-sdk"
 import { useEffect, useMemo, useState } from "react"
 import { Checkbox, Button } from "@agility/plenum-ui"
-import "@agility/plenum-ui/lib/tailwind.css"
+
 import { PostHogSidebar } from "@/components/PostHogSidebar"
 import Loader from "@/components/Loader"
-import "@/styles/globals.css"
+
 import { IAgilityContentItem } from "@/types/IAgilityContentItem"
 
 const Page = () => {
@@ -25,7 +25,7 @@ const Page = () => {
 	}, [appInstallContext?.configuration?.POSTHOG_PROJECT_ID])
 
 	useEffect(() => {
-
+		console.log("appInstallContext", appInstallContext)
 
 		console.log("postHogAPIKey ", postHogAPIKey, "postHogProjectId", postHogProjectId)
 

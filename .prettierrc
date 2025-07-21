@@ -9,5 +9,9 @@
 	"trailingComma": "none",
 	"bracketSpacing": true,
 	"jsxBracketSameLine": false,
-	"semi": false
+	"semi": false,
+	"tailwindStylesheet": "./src/styles/input.css",
+	"plugins": [
+		"prettier-plugin-tailwindcss"
+	]
 }

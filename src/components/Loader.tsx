@@ -4,7 +4,7 @@ interface LoaderProps {
     className?: string
 }
 
-export default function Loader({ className }: LoaderProps): JSX.Element {
+export default function Loader({ className }: LoaderProps) {
     return (
         <div
             className={cn(

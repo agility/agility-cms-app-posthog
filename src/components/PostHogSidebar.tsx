@@ -11,7 +11,7 @@ interface PostHogSidebarProps {
 	postHogAPIKey: string | null;
 }
 
-interface Experiment {
+export interface Experiment {
 	id: number;
 	name: string;
 	description: string;
@@ -67,8 +67,24 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 					exp.feature_flag_key === experimentKey
 				);
 
-				if (matchingExperiment) {
-					setExperiment(matchingExperiment);
+				//get the full experiemnt by id
+				if (matchingExperiment && matchingExperiment.id) {
+					const fullExperimentResponse = await fetch(`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/${matchingExperiment.id}/`, {
+						headers: {
+							'Authorization': `Bearer ${postHogAPIKey}`,
+							'Content-Type': 'application/json',
+						},
+					});
+
+					if (!fullExperimentResponse.ok) {
+						throw new Error(`Failed to fetch experiment details: ${fullExperimentResponse.status} ${fullExperimentResponse.statusText}`);
+					}
+
+					const fullExperimentData = await fullExperimentResponse.json();
+
+					console.log('Full Experiment Data:', fullExperimentData);
+					setExperiment(fullExperimentData);
+
 				} else {
 					// Don't set error here - we'll show the CreateExperiment component instead
 					setExperiment(null);
@@ -101,7 +117,12 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 	if (!experiment) {
 		// Show CreateExperiment component if no experiment found and we have the required props
 		if (postHogProjectId && !error) {
-			return <CreateExperiment experimentKey={experimentKey} postHogProjectId={postHogProjectId} />;
+			return <CreateExperiment
+				experimentKey={experimentKey}
+				postHogProjectId={postHogProjectId}
+				postHogAPIKey={postHogAPIKey}
+				onCreated={(experiment) => setExperiment(experiment)}
+			/>;
 		}
 
 		return (
@@ -139,14 +160,19 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 		<div className="max-w-2xl">
 
 			<div className="flex items-start justify-between flex-col sm:flex-row gap-2">
-				<div className="flex-1">
+				<div className='text-gray-500 uppercase text-xs font-semibold'>A/B Test Experiment</div>
+				<div className="flex justify-between gap-2 items-center w-full">
 					<h2 className="text-lg font-semibold text-gray-900">{experiment.name}</h2>
-					<p className="text-sm text-gray-600 mt-1">{experiment.description || 'No description provided'}</p>
+					<div>
+						<span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(experiment)}`}>
+							{getStatusText(experiment)}
+						</span>
+					</div>
 				</div>
-				<div className="flex flex-col gap-2 shrink-0">
-					<span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(experiment)}`}>
-						{getStatusText(experiment)}
-					</span>
+				<p className="text-sm text-gray-600 mt-1">{experiment.description || 'No description provided'}</p>
+
+				<div className="flex gap-2 shrink-0 justify-between w-full">
+
 					{postHogProjectId && (
 						<a
 							href={`https://app.posthog.com/project/${postHogProjectId}/experiments/${experiment.id}`}
@@ -160,7 +186,7 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 				</div>
 			</div>
 
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
 				<div>
 					<label className="text-sm font-medium text-gray-700">Experiment ID</label>
 					<p className="text-sm text-gray-900">{experiment.id}</p>
