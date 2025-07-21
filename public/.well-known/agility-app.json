@@ -1,7 +1,7 @@
 {
-	"name": "PostHog",
+	"name": "PostHog (Beta)",
 	"documentationLink": "https://agilitycms.com/docs/apps/posthog",
-	"description": "Connect to your PostHog instance for A/B testing.",
+	"description": "Connect to your PostHog instance for A/B testing, with more features coming soon.",
 	"version": "1.0.0",
 	"__sdkVersion": "2.0.0",
 	"configValues": [
