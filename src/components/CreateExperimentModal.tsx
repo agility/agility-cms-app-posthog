@@ -92,52 +92,39 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 	// Fetch variants from Agility CMS on mount
 	useEffect(() => {
 		const fetchCmsVariants = async () => {
-			console.log("[CreateExperimentModal] Starting fetchCmsVariants...")
-			console.log("[CreateExperimentModal] Props received:", { contentItem, instance, locale })
-
 			setVariantsLoading(true)
 			setVariantsError(null)
 
 			try {
-				console.log("[CreateExperimentModal] Using management token from props:", managementToken ? "yes" : "no")
-
 				const item = contentItem as IAgilityContentItem | null
-				console.log("[CreateExperimentModal] Content item:", item)
 
 				if (!item || item.contentID < 1) {
-					console.log("[CreateExperimentModal] No content item or contentID < 1")
 					setVariantsError("Please save this content item first before creating an experiment.")
 					setVariantsLoading(false)
 					return
 				}
 
 				if (!instance || !locale) {
-					console.log("[CreateExperimentModal] Missing instance or locale:", { instance, locale })
 					setVariantsError("Could not access Agility instance details.")
 					setVariantsLoading(false)
 					return
 				}
 
 				const variantListReferenceName = item.values["Variants"]
-				console.log("[CreateExperimentModal] Variants field value:", variantListReferenceName)
 
 				if (!variantListReferenceName) {
-					console.log("[CreateExperimentModal] No Variants field found in item.values")
 					setVariantsError("No variants field found. Make sure this component has a 'Variants' nested content list.")
 					setVariantsLoading(false)
 					return
 				}
 
-				console.log("[CreateExperimentModal] Creating API client...")
-				let options = new mgmtApi.Options()
+				const options = new mgmtApi.Options()
 				options.token = managementToken
-				let apiClient = new mgmtApi.ApiClient(options)
+				const apiClient = new mgmtApi.ApiClient(options)
 
-				let guid = instance.guid || ""
+				const guid = instance.guid || ""
 				const listParams = new ListParams()
 				listParams.fields = "variant"
-
-				console.log("[CreateExperimentModal] Fetching content list:", { variantListReferenceName, guid, locale })
 
 				const contentList = await apiClient.contentMethods.getContentList(
 					variantListReferenceName,
@@ -146,10 +133,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					listParams
 				)
 
-				console.log("[CreateExperimentModal] Content list result:", contentList)
-
 				if (!contentList || contentList?.totalCount === 0) {
-					console.log("[CreateExperimentModal] No items in content list")
 					setCmsVariants([])
 					setVariantsLoading(false)
 					return
@@ -157,7 +141,6 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 
 				const variants: string[] = []
 				contentList.items?.forEach(variantItem => {
-					console.log("[CreateExperimentModal] Processing variant item:", variantItem)
 					let v = variantItem["Variant"] || variantItem["variant"]
 					if (!v && variantItem.length > 0) {
 						v = variantItem[0]["Variant"] || variantItem[0]["variant"]
@@ -167,13 +150,10 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					}
 				})
 
-				console.log("[CreateExperimentModal] Found variants:", variants)
 				setCmsVariants(variants)
 			} catch (error) {
-				console.error("[CreateExperimentModal] Error fetching CMS variants:", error)
 				setVariantsError("Failed to load variants from Agility CMS.")
 			} finally {
-				console.log("[CreateExperimentModal] fetchCmsVariants complete")
 				setVariantsLoading(false)
 			}
 		}
@@ -255,8 +235,8 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					setShowSyncOption(true)
 				}
 			}
-		} catch (error) {
-			console.log('Could not check for existing feature flag:', error)
+		} catch {
+			// Silently fail - feature flag check is optional
 		}
 	}, [postHogAPIKey, postHogProjectId, experimentKey])
 
