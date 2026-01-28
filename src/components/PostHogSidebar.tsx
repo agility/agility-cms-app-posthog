@@ -44,7 +44,7 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 	const [resultsLoading, setResultsLoading] = useState(false);
 	const [resultsError, setResultsError] = useState<string | null>(null);
 
-	// Fetch experiment results
+	// Fetch experiment results via server-side API route
 	const fetchResults = async (experimentId: number) => {
 		if (!postHogAPIKey || !postHogProjectId) return;
 
@@ -52,28 +52,32 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 		setResultsError(null);
 
 		try {
+			// Use internal API route to proxy request to PostHog (avoids CORS issues)
 			const response = await fetch(
-				`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/${experimentId}/results/`,
+				`/api/posthog/experiments/${experimentId}/results`,
 				{
 					headers: {
-						'Authorization': `Bearer ${postHogAPIKey}`,
-						'Content-Type': 'application/json',
+						'x-posthog-api-key': postHogAPIKey,
+						'x-posthog-project-id': postHogProjectId,
 					},
 				}
 			);
 
 			if (!response.ok) {
-				if (response.status === 404) {
-					// No results yet - this is normal for new experiments
-					setResults(null);
-					return;
-				}
 				throw new Error(`Failed to fetch results: ${response.status}`);
 			}
 
 			const data = await response.json();
-			console.log('Experiment Results:', data);
-			setResults(data);
+
+			// Check if API returned "no results" indicator
+			if (data.noResults) {
+				setResults(null);
+				return;
+			}
+
+			// Handle both formats: direct data or nested in 'result'
+			const resultsData = data.result || data;
+			setResults(resultsData);
 		} catch (err) {
 			console.error('Error fetching results:', err);
 			setResultsError(err instanceof Error ? err.message : 'Failed to load results');
