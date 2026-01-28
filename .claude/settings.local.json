@@ -5,7 +5,8 @@
       "mcp__posthog__experiment-results-get",
       "WebFetch(domain:posthog.com)",
       "Bash(curl:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "WebFetch(domain:agilitycms.com)"
     ]
   }
 }

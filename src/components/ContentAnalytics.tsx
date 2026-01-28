@@ -1,5 +1,23 @@
 "use client"
 
+/**
+ * ContentAnalytics Component
+ *
+ * Displays analytics for a specific content item from PostHog.
+ * Queries are filtered by contentID and optionally by locale.
+ *
+ * Metrics displayed:
+ * - Views: Total pageviews where this content appeared
+ * - Pages: Number of unique pages featuring this content
+ * - Scroll: Average scroll depth on pages with this content
+ * - Clicks: Outbound link clicks from this content
+ * - Scroll Distribution: Breakdown of how far users scroll
+ * - Time Distribution: Breakdown of time spent on page
+ * - Top Pages: Pages where this content gets the most views
+ *
+ * All data is filtered to the last 30 days.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { PostHogLoader } from './PostHogLoader';
 import {
@@ -9,6 +27,7 @@ import {
 
 interface ContentAnalyticsProps {
 	contentID?: number;
+	locale?: string | null;
 	postHogAPIKey: string | null;
 	postHogProjectId: string | null;
 }
@@ -25,6 +44,7 @@ interface ContentStats {
 
 export function ContentAnalytics({
 	contentID,
+	locale,
 	postHogAPIKey,
 	postHogProjectId
 }: ContentAnalyticsProps) {
@@ -33,6 +53,7 @@ export function ContentAnalytics({
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
+		// Skip fetching if required parameters are missing
 		if (!contentID || !postHogAPIKey || !postHogProjectId) {
 			return;
 		}
@@ -46,6 +67,86 @@ export function ContentAnalytics({
 				projectId: postHogProjectId
 			};
 
+			// Build locale filter clause if locale is provided
+			// This filters events to only those matching the current content locale
+			const localeFilter = locale ? `AND JSONExtractString(properties, 'locale') = '${locale}'` : '';
+
+			// Query 1: Count total pageview impressions for this content
+			// Uses has() to check if contentID exists in the contentIDs array property
+			const impressionsQuery = `
+				SELECT count() as impressions
+				FROM events
+				WHERE event = '$pageview'
+					AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+			`;
+
+			// Query 2: Get top pages where this content appears
+			// Groups by pageID and orders by view count
+			const pagesQuery = `
+				SELECT
+					JSONExtractInt(properties, 'pageID') as pageID,
+					count() as views
+				FROM events
+				WHERE event = '$pageview'
+					AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
+					AND JSONExtractInt(properties, 'pageID') > 0
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+				GROUP BY pageID
+				ORDER BY views DESC
+				LIMIT 5
+			`;
+
+			// Query 3: Calculate average scroll depth from scroll_milestone events
+			const scrollQuery = `
+				SELECT avg(JSONExtractInt(properties, 'depth')) as avgDepth
+				FROM events
+				WHERE event = 'scroll_milestone'
+					AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+			`;
+
+			// Query 4: Count outbound link clicks from this content
+			const ctaQuery = `
+				SELECT count() as clicks
+				FROM events
+				WHERE event = 'outbound_link_clicked'
+					AND JSONExtractInt(properties, 'contentID') = ${contentID}
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+			`;
+
+			// Query 5: Get scroll depth distribution for visualization
+			const scrollDistQuery = `
+				SELECT
+					JSONExtractInt(properties, 'depth') as depth,
+					count() as count
+				FROM events
+				WHERE event = 'scroll_milestone'
+					AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+				GROUP BY depth
+				ORDER BY depth
+			`;
+
+			// Query 6: Get time on page distribution for visualization
+			const timeDistQuery = `
+				SELECT
+					JSONExtractInt(properties, 'seconds') as seconds,
+					count() as count
+				FROM events
+				WHERE event = 'time_milestone'
+					AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
+					${localeFilter}
+					AND timestamp > now() - INTERVAL 30 DAY
+				GROUP BY seconds
+				ORDER BY seconds
+			`;
+
 			try {
 				// Run all queries in parallel for better performance
 				const [
@@ -56,76 +157,15 @@ export function ContentAnalytics({
 					scrollDistResult,
 					timeDistResult
 				] = await Promise.all([
-					// Query 1: Count impressions
-					runHogQLQuery(config, `
-						SELECT count() as impressions
-						FROM events
-						WHERE event = '$pageview'
-							AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
-							AND timestamp > now() - INTERVAL 30 DAY
-					`).catch(() => ({ results: [[0]] })),
-
-					// Query 2: Pages this content appears on
-					runHogQLQuery(config, `
-						SELECT
-							JSONExtractInt(properties, 'pageID') as pageID,
-							count() as views
-						FROM events
-						WHERE event = '$pageview'
-							AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
-							AND JSONExtractInt(properties, 'pageID') > 0
-							AND timestamp > now() - INTERVAL 30 DAY
-						GROUP BY pageID
-						ORDER BY views DESC
-						LIMIT 5
-					`).catch(() => ({ results: [] })),
-
-					// Query 3: Average scroll depth
-					runHogQLQuery(config, `
-						SELECT avg(JSONExtractInt(properties, 'depth')) as avgDepth
-						FROM events
-						WHERE event = 'scroll_milestone'
-							AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
-							AND timestamp > now() - INTERVAL 30 DAY
-					`).catch(() => ({ results: [[0]] })),
-
-					// Query 4: CTA clicks
-					runHogQLQuery(config, `
-						SELECT count() as clicks
-						FROM events
-						WHERE event = 'outbound_link_clicked'
-							AND JSONExtractInt(properties, 'contentID') = ${contentID}
-							AND timestamp > now() - INTERVAL 30 DAY
-					`).catch(() => ({ results: [[0]] })),
-
-					// Query 5: Scroll depth distribution
-					runHogQLQuery(config, `
-						SELECT
-							JSONExtractInt(properties, 'depth') as depth,
-							count() as count
-						FROM events
-						WHERE event = 'scroll_milestone'
-							AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
-							AND timestamp > now() - INTERVAL 30 DAY
-						GROUP BY depth
-						ORDER BY depth
-					`).catch(() => ({ results: [] })),
-
-					// Query 6: Time distribution
-					runHogQLQuery(config, `
-						SELECT
-							JSONExtractInt(properties, 'seconds') as seconds,
-							count() as count
-						FROM events
-						WHERE event = 'time_milestone'
-							AND has(JSONExtractArrayRaw(properties, 'contentIDs'), toString(${contentID}))
-							AND timestamp > now() - INTERVAL 30 DAY
-						GROUP BY seconds
-						ORDER BY seconds
-					`).catch(() => ({ results: [] }))
+					runHogQLQuery(config, impressionsQuery).catch(() => ({ results: [[0]] })),
+					runHogQLQuery(config, pagesQuery).catch(() => ({ results: [] })),
+					runHogQLQuery(config, scrollQuery).catch(() => ({ results: [[0]] })),
+					runHogQLQuery(config, ctaQuery).catch(() => ({ results: [[0]] })),
+					runHogQLQuery(config, scrollDistQuery).catch(() => ({ results: [] })),
+					runHogQLQuery(config, timeDistQuery).catch(() => ({ results: [] }))
 				]);
 
-				// Process scroll distribution
+				// Process scroll distribution - calculate percentages for each depth
 				const scrollDistRaw: any[][] = scrollDistResult.results || [];
 				const totalScrollEvents = scrollDistRaw.reduce((sum, row) => sum + (row[1] || 0), 0);
 				const scrollDistribution = scrollDistRaw.map((row) => ({
@@ -134,7 +174,7 @@ export function ContentAnalytics({
 					percent: totalScrollEvents > 0 ? Math.round((row[1] / totalScrollEvents) * 100) : 0
 				}));
 
-				// Process time distribution
+				// Process time distribution - calculate percentages for each time bucket
 				const timeDistRaw: any[][] = timeDistResult.results || [];
 				const totalTimeEvents = timeDistRaw.reduce((sum, row) => sum + (row[1] || 0), 0);
 				const timeDistribution = timeDistRaw.map((row) => ({
@@ -143,7 +183,10 @@ export function ContentAnalytics({
 					percent: totalTimeEvents > 0 ? Math.round((row[1] / totalTimeEvents) * 100) : 0
 				}));
 
+				// Process pages data
 				const pagesRaw: any[][] = pagesResult.results || [];
+
+				// Set the consolidated stats object
 				setStats({
 					impressions: impressionsResult.results?.[0]?.[0] || 0,
 					uniquePages: pagesRaw.length,
@@ -165,107 +208,72 @@ export function ContentAnalytics({
 		};
 
 		fetchStats();
-	}, [contentID, postHogAPIKey, postHogProjectId]);
+	}, [contentID, locale, postHogAPIKey, postHogProjectId]);
 
+	// Show prompt to save content if no contentID
 	if (!contentID || contentID <= 0) {
 		return (
-			<div className="text-center py-8 text-gray-500">
-				<svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-				</svg>
-				<p className="font-medium">Save this content item first</p>
-				<p className="text-sm mt-1">Analytics will be available after saving.</p>
+			<div className="text-center py-4 text-gray-500">
+				<p className="text-xs font-medium">Save content first</p>
+				<p className="text-[10px] mt-0.5">Analytics available after saving.</p>
 			</div>
 		);
 	}
 
+	// Show loading spinner while fetching data
 	if (loading) {
-		return <PostHogLoader title="Loading Analytics" message="Fetching data from PostHog..." />;
+		return (
+			<div className="flex items-center gap-2 text-gray-500 text-xs py-4">
+				<div className="animate-spin h-3 w-3 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+				Loading...
+			</div>
+		);
 	}
 
+	// Show error message if query failed
 	if (error) {
 		return (
-			<div className="bg-red-50 border border-red-200 rounded-md p-3">
-				<p className="text-red-800 text-sm font-medium">Error loading analytics</p>
-				<p className="text-red-600 text-sm mt-1">{error}</p>
+			<div className="bg-red-50 rounded p-2">
+				<p className="text-red-800 text-xs">{error}</p>
 			</div>
 		);
 	}
 
+	// Show empty state if no stats available
 	if (!stats) {
 		return (
-			<div className="text-center py-8 text-gray-500">
-				<p>No analytics data available yet.</p>
-			</div>
+			<p className="text-center py-4 text-gray-400 text-xs">No data available</p>
 		);
 	}
 
+	// Check if there's any meaningful data to display
 	const hasData = stats.impressions > 0 || stats.ctaClicks > 0 || stats.pages.length > 0;
 
 	return (
-		<div className="space-y-4">
-			<div className="text-gray-500 uppercase text-xs font-semibold">
-				Content Analytics (Last 30 Days)
-			</div>
+		<div className="space-y-2">
+			<div className="text-[10px] text-gray-400 uppercase">Last 30 Days</div>
 
 			{!hasData ? (
-				<div className="text-center py-6 bg-gray-50 rounded-lg">
-					<svg className="mx-auto h-10 w-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-					</svg>
-					<p className="text-gray-600 text-sm font-medium">No data yet</p>
-					<p className="text-gray-400 text-xs mt-1">
-						Analytics will appear once this content receives traffic.
-					</p>
+				// Empty state when no traffic data exists
+				<div className="text-center py-3 bg-gray-50 rounded">
+					<p className="text-gray-500 text-xs">No data yet</p>
+					<p className="text-gray-400 text-[10px] mt-0.5">Waiting for traffic</p>
 				</div>
 			) : (
 				<>
-					{/* Stats Grid */}
-					<div className="grid grid-cols-2 gap-3">
-						<StatCard
-							value={stats.impressions.toLocaleString()}
-							label="Impressions"
-							icon={
-								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-								</svg>
-							}
-						/>
-						<StatCard
-							value={stats.uniquePages.toString()}
-							label="Pages Using"
-							icon={
-								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-								</svg>
-							}
-						/>
-						<StatCard
-							value={`${stats.avgScrollDepth}%`}
-							label="Avg Scroll"
-							icon={
-								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-								</svg>
-							}
-						/>
-						<StatCard
-							value={stats.ctaClicks.toLocaleString()}
-							label="CTA Clicks"
-							icon={
-								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-								</svg>
-							}
-						/>
+					{/* Stats Grid - 2x2 layout showing key metrics */}
+					<div className="grid grid-cols-2 gap-1.5">
+						<StatCard value={stats.impressions.toLocaleString()} label="Views" />
+						<StatCard value={stats.uniquePages.toString()} label="Pages" />
+						<StatCard value={`${stats.avgScrollDepth}%`} label="Scroll" />
+						<StatCard value={stats.ctaClicks.toLocaleString()} label="Clicks" />
 					</div>
 
-					{/* Scroll Distribution */}
+					{/* Scroll Depth Distribution - shows how far users scroll */}
 					{stats.scrollDistribution.length > 0 && (
 						<div>
-							<div className="text-sm font-medium text-gray-700 mb-2">Scroll Depth</div>
-							<div className="space-y-2">
+							<div className="text-[10px] text-gray-400 uppercase mb-1">Scroll Depth</div>
+							<div className="space-y-1">
 								{stats.scrollDistribution.map((item) => (
 									<ProgressBar
 										key={item.depth}
@@ -278,11 +286,11 @@ export function ContentAnalytics({
 						</div>
 					)}
 
-					{/* Time Distribution */}
+					{/* Time on Page Distribution - shows how long users stay */}
 					{stats.timeDistribution.length > 0 && (
 						<div>
-							<div className="text-sm font-medium text-gray-700 mb-2">Time on Page</div>
-							<div className="space-y-2">
+							<div className="text-[10px] text-gray-400 uppercase mb-1">Time on Page</div>
+							<div className="space-y-1">
 								{stats.timeDistribution.map((item) => (
 									<ProgressBar
 										key={item.seconds}
@@ -295,24 +303,18 @@ export function ContentAnalytics({
 						</div>
 					)}
 
-					{/* Pages List */}
+					{/* Top Pages List - pages where this content gets most views */}
 					{stats.pages.length > 0 && (
 						<div>
-							<div className="text-sm font-medium text-gray-700 mb-2">
-								Top Pages Using This Content
-							</div>
-							<div className="space-y-2">
+							<div className="text-[10px] text-gray-400 uppercase mb-1">Top Pages</div>
+							<div className="space-y-0.5">
 								{stats.pages.map((page) => (
 									<div
 										key={page.pageID}
-										className="flex justify-between items-center text-sm bg-gray-50 rounded px-3 py-2"
+										className="flex justify-between items-center text-xs bg-gray-50 rounded px-2 py-1"
 									>
-										<span className="text-gray-600">
-											Page #{page.pageID}
-										</span>
-										<span className="text-gray-900 font-medium">
-											{page.views.toLocaleString()} views
-										</span>
+										<span className="text-gray-500">#{page.pageID}</span>
+										<span className="text-gray-700 font-medium">{page.views.toLocaleString()}</span>
 									</div>
 								))}
 							</div>
@@ -321,53 +323,59 @@ export function ContentAnalytics({
 				</>
 			)}
 
-			{/* View in PostHog Link */}
+			{/* Deep link to view events in PostHog dashboard */}
 			{postHogProjectId && (
 				<a
 					href={`https://app.posthog.com/project/${postHogProjectId}/events?properties=[{"key":"contentIDs","value":"${contentID}","operator":"icontains","type":"event"}]`}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="inline-flex items-center justify-center w-full px-3 py-2 text-sm font-medium bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors"
+					className="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
 				>
-					View in PostHog
-					<svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-					</svg>
+					View in PostHog →
 				</a>
 			)}
 		</div>
 	);
 }
 
-// Helper Components
+// ============================================================================
+// Helper Components - Compact styling for narrow sidebar panels
+// ============================================================================
 
-function StatCard({ value, label, icon }: { value: string; label: string; icon: React.ReactNode }) {
+/**
+ * StatCard - Displays a single metric with value and label
+ */
+function StatCard({ value, label }: { value: string; label: string }) {
 	return (
-		<div className="bg-gray-50 rounded-lg p-3">
-			<div className="flex items-center gap-2 text-gray-400 mb-1">
-				{icon}
-			</div>
-			<div className="text-2xl font-bold text-gray-900">{value}</div>
-			<div className="text-xs text-gray-500">{label}</div>
+		<div className="bg-gray-50 rounded p-2 text-center">
+			<div className="text-base font-bold text-gray-900">{value}</div>
+			<div className="text-[10px] text-gray-500">{label}</div>
 		</div>
 	);
 }
 
+/**
+ * ProgressBar - Displays a horizontal bar with label, fill percentage, and count
+ */
 function ProgressBar({ label, value, count }: { label: string; value: number; count: number }) {
 	return (
-		<div className="flex items-center gap-3 text-sm">
-			<span className="w-12 text-gray-500 text-right">{label}</span>
-			<div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+		<div className="flex items-center gap-2 text-xs">
+			<span className="w-8 text-gray-500 text-right">{label}</span>
+			<div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
 				<div
-					className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+					className="h-full bg-indigo-500 rounded-full"
 					style={{ width: `${Math.min(value, 100)}%` }}
 				/>
 			</div>
-			<span className="w-16 text-gray-600 text-right">{count.toLocaleString()}</span>
+			<span className="w-8 text-gray-500 text-right">{count}</span>
 		</div>
 	);
 }
 
+/**
+ * Formats seconds into a human-readable time string
+ * Examples: 30 -> "30s", 90 -> "1m 30s", 120 -> "2m"
+ */
 function formatSeconds(seconds: number): string {
 	if (seconds < 60) return `${seconds}s`;
 	const mins = Math.floor(seconds / 60);
