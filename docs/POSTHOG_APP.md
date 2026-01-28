@@ -846,26 +846,43 @@ Without the loading state check:
 
 This can skew experiment results because users briefly see both variants.
 
-### Step 3: Content Model Setup
+### Step 3: Content Model Setup - ABTestHero Example
 
-In Agility CMS, add these fields to your content model:
+The **A/B Test Hero** component model in Agility CMS demonstrates the recommended pattern for A/B testing components:
 
-| Field Name | Field Type | Description |
-|------------|-----------|-------------|
-| `ExperimentKey` | Text | Must match your PostHog feature flag key |
-| `Variants` | Linked Content | List of variant content items |
-
-### Step 4: Variant Content Model
-
-Create a model for variants with:
+**ABTestHero Component Model Fields:**
 
 | Field Name | Field Type | Description |
 |------------|-----------|-------------|
-| `Variant` | Text | Variant key (e.g., "variant-a") |
-| `Title` | Text | Variant-specific title |
-| `Description` | Rich Text | Variant-specific description |
-| `CTAUrl` | Text | Variant-specific CTA link |
-| `CTAText` | Text | Variant-specific CTA text |
+| `ExperimentKey` | Text (required) | The PostHog feature flag key. Must match exactly. |
+| **Tab: Control** | Tab | Groups the control variant fields |
+| `Heading` | Text (required) | Control variant heading |
+| `Description` | Long Text (required) | Control variant description |
+| `CallToAction` | Link | Control variant CTA button |
+| `Image` | Image (required) | Control variant hero image |
+| `ImagePosition` | Dropdown | Image position (left/right) |
+| **Tab: Variants** | Tab | Groups the variant configuration |
+| `Variants` | Linked Content (Nested Grid) | List of test variants linked to ABTestHeroItem model |
+
+**Key Design Pattern:** The control variant content is stored directly on the component, while test variants are stored in a nested content list. This allows content editors to:
+1. Edit the control (default) content directly on the component
+2. Add multiple test variants in the Variants tab
+3. Preview each variant independently
+
+### Step 4: Variant Content Model - ABTestHeroItem
+
+The **A/B Test Hero Item** model stores each test variant:
+
+| Field Name | Field Type | Description |
+|------------|-----------|-------------|
+| `Variant` | Text (required) | Variant key (e.g., "variant_a", "Analytics", "Engagement"). This must match the PostHog feature flag variant key. |
+| `Heading` | Text (required) | Variant-specific heading |
+| `Description` | Long Text (required) | Variant-specific description |
+| `CallToAction` | Link | Variant-specific CTA button |
+| `Image` | Image (required) | Variant-specific hero image |
+| `ImagePosition` | Dropdown | Image position (left/right) |
+
+**Important:** The `Variant` field value becomes the feature flag variant key in PostHog. Use consistent naming conventions like `variant_a`, `variant_b` or descriptive names like `Analytics`, `Engagement`.
 
 ---
 
@@ -1018,17 +1035,65 @@ For each variant (control, variant-a, etc.):
 #### Primary Metrics
 Displays results for each metric configured in PostHog.
 
-### Creating Experiments from Agility
+### Creating Experiments from Agility (Automated)
 
-If no experiment exists for the `ExperimentKey`, the sidebar offers to create one:
+The PostHog app includes a **"Create Experiment"** button that automatically creates experiments in PostHog when no matching experiment exists. This streamlines the workflow for content editors.
 
-1. Ensure the content item is saved (has a contentID)
-2. Add variants to the `Variants` linked list
-3. Each variant needs a `Variant` field with a unique name (e.g., "variant-a")
-4. Click "Create Experiment" to automatically:
-   - Create a feature flag in PostHog
-   - Set up the experiment with your variants
-   - Configure even traffic distribution
+#### How It Works
+
+When you open the A/B Test tab in the content item sidebar:
+1. The app checks PostHog for an experiment with a matching `feature_flag_key`
+2. If no experiment exists, a "Create Experiment" button appears
+3. Clicking the button triggers automatic experiment creation
+
+#### What Gets Created
+
+The automated creation process:
+
+1. **Reads variants from Agility CMS** - Fetches all items from the `Variants` nested content list
+2. **Creates feature flag variants** - Combines a "control" variant with your CMS variants
+3. **Calculates traffic distribution** - Evenly distributes traffic (e.g., 5 variants = 20% each)
+4. **Creates the experiment in PostHog** with:
+   - Name: `Experiment: {experimentKey}`
+   - Feature flag key: The `ExperimentKey` field value
+   - Type: `product`
+   - Start date: Immediately
+   - Primary metric: `ab_test_cta_click` event (mean metric)
+   - Test account filtering: Enabled
+
+#### Prerequisites
+
+Before clicking "Create Experiment":
+
+1. **Save the content item** - The item must have a contentID
+2. **Add at least one variant** - Create items in the Variants nested list
+3. **Set variant keys** - Each variant item needs a unique `Variant` field value
+4. **Configure PostHog credentials** - API key must have `experiment:write` scope
+
+#### Example: Features Page Hero Experiment
+
+Here's a real example from the demo site:
+
+**Agility CMS Setup:**
+- ExperimentKey: `features-page-hero`
+- Control: Default hero content on the component
+- Variants: Analytics, Engagement, Security, Integrations
+
+**PostHog Result:**
+- 5 variants at 20% each: `control`, `Analytics`, `Engagement`, `Security`, `Integrations`
+- Primary metric: CTA Clicks (funnel on `ab_test_cta_click` event)
+- Feature flag: `features-page-hero` (auto-created and activated)
+
+#### Current Limitations
+
+The automated creation has some limitations to be aware of:
+
+| Limitation | Description | Workaround |
+|------------|-------------|------------|
+| **Fixed metric** | Only tracks `ab_test_cta_click` event | Edit in PostHog after creation |
+| **No custom targeting** | Creates experiment for all users | Configure targeting in PostHog |
+| **No duration settings** | Doesn't set recommended sample size | PostHog calculates this automatically |
+| **Single metric type** | Uses "mean" metric, not funnel | Change to funnel in PostHog if needed |
 
 ---
 
@@ -1250,6 +1315,74 @@ LIMIT 5
 2. **Check pageID matches** - The pageID in events must match the Agility CMS page ID
 3. **Ensure data-agility-page attribute exists** - Your frontend layout should have this attribute
 4. **Wait for traffic** - New pages need pageviews before analytics appear
+
+---
+
+## Roadmap: Enhanced Experiment Creation
+
+The following enhancements are planned to improve the automated experiment creation workflow:
+
+### Planned Improvements
+
+#### 1. Configurable Metrics
+
+Currently, the app hardcodes `ab_test_cta_click` as the primary metric. Future versions should support:
+
+| Metric Type | Use Case | Example |
+|-------------|----------|---------|
+| **Funnel** | Multi-step conversions | View → Click → Purchase |
+| **Mean** | Average values | Revenue per user |
+| **Ratio** | Comparing two metrics | Clicks / Impressions |
+
+**Proposed Solution:** Add a `Metrics` field to the component model that lets content editors define which events to track, or provide a configuration UI in the sidebar.
+
+#### 2. Custom Event Mapping per Component
+
+Different A/B test components may track different events:
+
+| Component | Primary Event | Secondary Events |
+|-----------|---------------|------------------|
+| ABTestHero | `ab_test_cta_click` | `scroll_milestone`, `time_milestone` |
+| ABTestPricing | `pricing_plan_selected` | `pricing_faq_expanded` |
+| ABTestForm | `form_submitted` | `form_field_focused` |
+
+**Proposed Solution:** Add a configuration setting per component model that maps to specific PostHog events.
+
+#### 3. Targeting & Audience Configuration
+
+Add the ability to configure experiment targeting from the CMS:
+
+- **User properties**: Target by subscription tier, region, etc.
+- **Cohorts**: Use existing PostHog cohorts
+- **Percentage rollout**: Start with 10% and gradually increase
+
+#### 4. Experiment Templates
+
+Pre-configured experiment templates for common scenarios:
+
+| Template | Metrics | Duration | Description |
+|----------|---------|----------|-------------|
+| **CTA Optimization** | Click rate, Conversion | 2 weeks | Test button text, color, placement |
+| **Content Engagement** | Scroll depth, Time on page | 1 week | Test headlines, descriptions |
+| **Conversion Funnel** | Multi-step funnel | 4 weeks | Test entire user journeys |
+
+#### 5. Sync Variants from PostHog
+
+Two-way sync between Agility CMS variants and PostHog:
+
+- **Import variants**: Pull existing feature flag variants into CMS
+- **Update variants**: Push CMS variant changes to PostHog
+- **Delete handling**: Archive experiments when content is deleted
+
+### Implementation Priority
+
+| Priority | Enhancement | Impact |
+|----------|-------------|--------|
+| **High** | Configurable primary metric | Enables meaningful experiment results |
+| **High** | Funnel metric support | Tracks multi-step conversions |
+| **Medium** | Experiment templates | Faster setup for common patterns |
+| **Medium** | Targeting configuration | Better experiment segmentation |
+| **Low** | Two-way variant sync | Keeps CMS and PostHog in sync |
 
 ---
 
