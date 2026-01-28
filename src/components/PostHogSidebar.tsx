@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { IAgilityContentItem } from '../types/IAgilityContentItem';
 import { PostHogLoader } from './PostHogLoader';
 import { CreateExperiment } from './CreateExperiment';
+import { ExperimentResults, ExperimentResultsData } from './ExperimentResults';
 
 interface PostHogSidebarProps {
 	experimentKey: string;
@@ -37,6 +38,49 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 	const [experiment, setExperiment] = useState<Experiment | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	// Results state
+	const [results, setResults] = useState<ExperimentResultsData | null>(null);
+	const [resultsLoading, setResultsLoading] = useState(false);
+	const [resultsError, setResultsError] = useState<string | null>(null);
+
+	// Fetch experiment results
+	const fetchResults = async (experimentId: number) => {
+		if (!postHogAPIKey || !postHogProjectId) return;
+
+		setResultsLoading(true);
+		setResultsError(null);
+
+		try {
+			const response = await fetch(
+				`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/${experimentId}/results/`,
+				{
+					headers: {
+						'Authorization': `Bearer ${postHogAPIKey}`,
+						'Content-Type': 'application/json',
+					},
+				}
+			);
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					// No results yet - this is normal for new experiments
+					setResults(null);
+					return;
+				}
+				throw new Error(`Failed to fetch results: ${response.status}`);
+			}
+
+			const data = await response.json();
+			console.log('Experiment Results:', data);
+			setResults(data);
+		} catch (err) {
+			console.error('Error fetching results:', err);
+			setResultsError(err instanceof Error ? err.message : 'Failed to load results');
+		} finally {
+			setResultsLoading(false);
+		}
+	};
 
 	useEffect(() => {
 		const fetchExperiment = async () => {
@@ -84,6 +128,9 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 
 					console.log('Full Experiment Data:', fullExperimentData);
 					setExperiment(fullExperimentData);
+
+					// Fetch results for this experiment
+					fetchResults(fullExperimentData.id);
 
 				} else {
 					// Don't set error here - we'll show the CreateExperiment component instead
@@ -226,6 +273,14 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 					<p className="text-sm text-gray-900 mt-1 break-words">{experiment.conclusion_comment}</p>
 				</div>
 			)}
+
+			{/* Experiment Results Section */}
+			<ExperimentResults
+				results={results}
+				loading={resultsLoading}
+				error={resultsError}
+				experimentName={experiment.name}
+			/>
 		</div>
 
 	);
