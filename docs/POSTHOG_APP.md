@@ -846,26 +846,43 @@ Without the loading state check:
 
 This can skew experiment results because users briefly see both variants.
 
-### Step 3: Content Model Setup
+### Step 3: Content Model Setup - ABTestHero Example
 
-In Agility CMS, add these fields to your content model:
+The **A/B Test Hero** component model in Agility CMS demonstrates the recommended pattern for A/B testing components:
 
-| Field Name | Field Type | Description |
-|------------|-----------|-------------|
-| `ExperimentKey` | Text | Must match your PostHog feature flag key |
-| `Variants` | Linked Content | List of variant content items |
-
-### Step 4: Variant Content Model
-
-Create a model for variants with:
+**ABTestHero Component Model Fields:**
 
 | Field Name | Field Type | Description |
 |------------|-----------|-------------|
-| `Variant` | Text | Variant key (e.g., "variant-a") |
-| `Title` | Text | Variant-specific title |
-| `Description` | Rich Text | Variant-specific description |
-| `CTAUrl` | Text | Variant-specific CTA link |
-| `CTAText` | Text | Variant-specific CTA text |
+| `ExperimentKey` | Text (required) | The PostHog feature flag key. Must match exactly. |
+| **Tab: Control** | Tab | Groups the control variant fields |
+| `Heading` | Text (required) | Control variant heading |
+| `Description` | Long Text (required) | Control variant description |
+| `CallToAction` | Link | Control variant CTA button |
+| `Image` | Image (required) | Control variant hero image |
+| `ImagePosition` | Dropdown | Image position (left/right) |
+| **Tab: Variants** | Tab | Groups the variant configuration |
+| `Variants` | Linked Content (Nested Grid) | List of test variants linked to ABTestHeroItem model |
+
+**Key Design Pattern:** The control variant content is stored directly on the component, while test variants are stored in a nested content list. This allows content editors to:
+1. Edit the control (default) content directly on the component
+2. Add multiple test variants in the Variants tab
+3. Preview each variant independently
+
+### Step 4: Variant Content Model - ABTestHeroItem
+
+The **A/B Test Hero Item** model stores each test variant:
+
+| Field Name | Field Type | Description |
+|------------|-----------|-------------|
+| `Variant` | Text (required) | Variant key (e.g., "variant_a", "Analytics", "Engagement"). This must match the PostHog feature flag variant key. |
+| `Heading` | Text (required) | Variant-specific heading |
+| `Description` | Long Text (required) | Variant-specific description |
+| `CallToAction` | Link | Variant-specific CTA button |
+| `Image` | Image (required) | Variant-specific hero image |
+| `ImagePosition` | Dropdown | Image position (left/right) |
+
+**Important:** The `Variant` field value becomes the feature flag variant key in PostHog. Use consistent naming conventions like `variant_a`, `variant_b` or descriptive names like `Analytics`, `Engagement`.
 
 ---
 
@@ -939,13 +956,15 @@ $posthog.capture('$pageview', {
 
 ---
 
-## Content Item Sidebar
+## CMS Surfaces
 
-### Analytics Tab
+### Content Item Sidebar
+
+#### Analytics Tab
 
 The Analytics tab shows performance metrics for the current content item over the last 30 days, filtered by locale.
 
-### Metrics Displayed
+**Metrics Displayed:**
 
 | Metric | Description |
 |--------|-------------|
@@ -954,42 +973,21 @@ The Analytics tab shows performance metrics for the current content item over th
 | **Scroll** | Average scroll depth on pages with this content |
 | **Clicks** | Clicks on outbound links within this component |
 
-### Scroll Depth Distribution
+**Scroll Depth Distribution** - Shows how far users scroll: 25%, 50%, 75%, 100%
 
-Shows how far users scroll on pages containing this content:
-- 25% reached
-- 50% reached
-- 75% reached
-- 100% reached
+**Time on Page Distribution** - Shows engagement time: 30s, 60s, 2m, 5m
 
-### Time on Page Distribution
+**Top Pages** - Lists the pages where this content appears, ranked by traffic.
 
-Shows how long users spend on pages with this content:
-- 30 seconds
-- 60 seconds
-- 2 minutes
-- 5 minutes
-
-### Top Pages
-
-Lists the pages where this content appears, ranked by traffic.
-
----
-
-## A/B Testing Tab
+#### A/B Testing Tab
 
 The A/B Testing tab shows experiment details and live results from PostHog.
 
-### Requirements
-
-To use A/B testing, your content model needs:
-
+**Requirements** - Your content model needs:
 1. **ExperimentKey field** (Text) - The PostHog feature flag key
 2. **Variants field** (Linked Content List, optional) - For creating experiments from Agility
 
-### Experiment Information
-
-When an experiment exists, the sidebar shows:
+**Experiment Information** - When an experiment exists, the sidebar shows:
 
 | Field | Description |
 |-------|-------------|
@@ -1000,43 +998,118 @@ When an experiment exists, the sidebar shows:
 | **Start/End Date** | Experiment duration |
 | **Conclusion** | If concluded, shows the winning variant |
 
-### Live Results
+**Live Results** - The sidebar fetches real-time experiment results including:
+- **Statistical Significance** - Shows whether results are significant and the winning variant
+- **Variant Performance** - Exposures, probability, confidence interval, conversion rate per variant
+- **Primary Metrics** - Results for each metric configured in PostHog
 
-The sidebar fetches real-time experiment results including:
+#### Creating Experiments (Modal UI)
 
-#### Statistical Significance
-- Shows whether results are statistically significant
-- Displays the winning variant and win probability
+The PostHog app includes a full-featured **Create Experiment** modal that guides content editors through experiment setup without leaving the CMS.
 
-#### Variant Performance
-For each variant (control, variant-a, etc.):
-- **Exposures** - Number of users who saw this variant
-- **Probability** - Likelihood this variant is the winner
-- **Confidence Interval** - 95% CI for the effect size
-- **Conversion Rate** - If tracking conversions
+#### How It Works
 
-#### Primary Metrics
-Displays results for each metric configured in PostHog.
+When you open the A/B Test tab in the content item sidebar:
+1. The app checks PostHog for an experiment with a matching `feature_flag_key`
+2. If no experiment exists, a "Create Experiment" button appears
+3. Clicking the button opens a 3-step modal wizard
 
-### Creating Experiments from Agility
+#### Variant Validation
 
-If no experiment exists for the `ExperimentKey`, the sidebar offers to create one:
+Before the modal allows experiment creation, it validates that:
+- The content item has been saved (has a contentID)
+- At least one variant exists in the Variants nested content list
+- Each variant has a unique `Variant` field value
 
-1. Ensure the content item is saved (has a contentID)
-2. Add variants to the `Variants` linked list
-3. Each variant needs a `Variant` field with a unique name (e.g., "variant-a")
-4. Click "Create Experiment" to automatically:
-   - Create a feature flag in PostHog
-   - Set up the experiment with your variants
-   - Configure even traffic distribution
+If no variants are found, the modal displays instructions for adding them.
 
----
+#### Step 1: Choose Template
 
-## Page Sidebar
+Select from pre-configured experiment templates:
+
+| Template | Description | Default Metrics |
+|----------|-------------|-----------------|
+| **CTA Optimization** | Test button text, color, or placement | CTA Clicks |
+| **Content Engagement** | Test headlines, descriptions, or layouts | Scroll Depth, Time on Page |
+| **Conversion Funnel** | Track multi-step conversion flows | View to Click Conversion |
+| **Custom Experiment** | Configure your own metrics | (none - add manually) |
+
+#### Step 2: Configure
+
+Customize the experiment settings:
+
+**Basic Settings:**
+- **Experiment Name** - Descriptive name for the experiment
+- **Description** - What you're testing and why
+
+**Experiment Type:**
+- **Product** (Recommended) - For in-app features, CTAs, and content. Tracks identified users across sessions.
+- **Web** - For landing pages and marketing. Session-based visitor tracking.
+
+**Metrics:**
+- Add or remove metrics to track
+- Supports **Mean** (count events) and **Funnel** (multi-step conversion) metrics
+- Choose from common events like Page View, CTA Click, Scroll Milestone, Form Submitted, etc.
+- For funnel metrics, define the sequence of steps (e.g., pageview → CTA click)
+
+**Targeting:**
+- **Filter test accounts** - Exclude internal/test users
+- **Traffic allocation** - Control what percentage of users enter the experiment (10-100%)
+
+#### Step 3: Review
+
+Review all settings before creation:
+- Experiment name and feature flag key
+- Experiment type (Product/Web)
+- Traffic allocation percentage
+- All variants with traffic split calculation
+- Configured metrics
+
+Click **Create Experiment** to create in PostHog.
+
+#### What Gets Created
+
+The modal creates a complete experiment in PostHog:
+
+1. **Feature flag** with multivariate variants (control + your CMS variants)
+2. **Traffic distribution** evenly split across all variants
+3. **Configured metrics** based on your template and customizations
+4. **Targeting rules** based on your settings
+5. **Immediate start** - experiment begins collecting data right away
+
+#### Prerequisites
+
+Before creating an experiment:
+
+1. **Save the content item** - The item must have a contentID
+2. **Add at least one variant** - Create items in the Variants nested list
+3. **Set variant keys** - Each variant item needs a unique `Variant` field value
+4. **Configure PostHog credentials** - API key must have `experiment:write` scope
+
+#### Example: Features Page Hero Experiment
+
+**Agility CMS Setup:**
+- ExperimentKey: `features-page-hero`
+- Control: Default hero content on the component
+- Variants: Analytics, Engagement, Security, Integrations
+
+**Using the Modal:**
+1. Select "CTA Optimization" template
+2. Name: "Features Page Hero Test"
+3. Type: Product (recommended)
+4. Metrics: CTA Clicks (default from template)
+5. Traffic: 100%
+
+**PostHog Result:**
+- 5 variants at 20% each: `control`, `Analytics`, `Engagement`, `Security`, `Integrations`
+- Primary metric: CTA Clicks
+- Feature flag: `features-page-hero` (auto-created and activated)
+
+### Page Sidebar
 
 The Page Sidebar shows analytics for the currently selected page in the Pages section of Agility CMS.
 
-### Metrics Displayed
+**Metrics Displayed:**
 
 | Metric | Description |
 |--------|-------------|
@@ -1045,33 +1118,13 @@ The Page Sidebar shows analytics for the currently selected page in the Pages se
 | **Avg Scroll Depth** | Average percentage scrolled on this page |
 | **Avg Time on Page** | Average time users spend on this page |
 
-### Scroll Depth Distribution
+**Additional Data:**
+- **Scroll Depth Distribution** - 25%, 50%, 75%, 100% reached
+- **Time on Page Distribution** - 30s, 60s, 2m, 5m
+- **Top Referrers** - Top 5 referring domains/URLs
+- **UTM Sources** - Campaign tracking sources
 
-Shows how far users scroll on this page:
-- 25% reached
-- 50% reached
-- 75% reached
-- 100% reached
-
-### Time on Page Distribution
-
-Shows how long users spend on this page:
-- 30 seconds
-- 60 seconds
-- 2 minutes
-- 5 minutes
-
-### Top Referrers
-
-Lists the top 5 referring domains/URLs that send traffic to this page.
-
-### UTM Sources
-
-Shows UTM campaign sources for traffic to this page (useful for tracking marketing campaigns).
-
-### How Page Tracking Works
-
-The page sidebar queries PostHog using the `pageID` property. Your frontend must include `pageID` in tracked events:
+**How Page Tracking Works** - The page sidebar queries PostHog using the `pageID` property. Your frontend must include `pageID` in tracked events:
 
 ```typescript
 // Include pageID in all events
@@ -1083,50 +1136,24 @@ posthog.capture('$pageview', {
 
 The `pageID` should come from the `data-agility-page` attribute on your page layout.
 
----
-
-## Dashboard
+### Dashboard
 
 The Dashboard provides a site-wide view of your PostHog analytics, accessible from the main dashboard area in Agility CMS.
 
-### Features
+**Summary Statistics** - Four key metrics: Total Page Views, Unique Visitors, Avg Scroll Depth, Avg Time on Page
 
-#### Summary Statistics
-Four key metrics at a glance:
-- **Total Page Views** - Sum of all pageviews in the selected period
-- **Unique Visitors** - Distinct users based on PostHog's `distinct_id`
-- **Avg Scroll Depth** - Average scroll percentage across all pages
-- **Avg Time on Page** - Average engagement time
+**Date Range Selector** - Choose from: Last 7, 14, 30 (default), 60, or 90 days
 
-#### Date Range Selector
-Choose from predefined ranges:
-- Last 7 days
-- Last 14 days
-- Last 30 days (default)
-- Last 60 days
-- Last 90 days
-
-#### Page Views Trend
-Interactive bar chart showing daily page views over the selected period. Hover over bars to see exact counts.
-
-#### Top Pages
-Ranked list of most visited pages with:
-- Page path
-- View count
-- Visual progress bar
-
-#### Engagement Metrics
-Distributions for scroll depth (25%, 50%, 75%, 100%) and time on page (30s, 60s, 2m, 5m).
-
-#### Top Referrers
-Traffic sources bringing visitors to your site.
-
-#### Locale Distribution
-Breakdown of traffic by language/locale (if tracked).
+**Widgets:**
+- **Page Views Trend** - Interactive bar chart showing daily page views
+- **Top Pages** - Ranked list of most visited pages with view counts
+- **Engagement Metrics** - Scroll depth and time on page distributions
+- **Top Referrers** - Traffic sources bringing visitors to your site
+- **Locale Distribution** - Breakdown by language/locale (if tracked)
 
 ---
 
-## PostHog API Reference
+## API Reference
 
 The app uses these PostHog API endpoints:
 
@@ -1278,6 +1305,93 @@ LIMIT 5
 2. **Check pageID matches** - The pageID in events must match the Agility CMS page ID
 3. **Ensure data-agility-page attribute exists** - Your frontend layout should have this attribute
 4. **Wait for traffic** - New pages need pageviews before analytics appear
+
+---
+
+## Features
+
+The experiment creation modal includes the following capabilities:
+
+### Configurable Metrics
+
+| Metric Type | Use Case | Example |
+|-------------|----------|---------|
+| **Mean** | Count events | CTA Clicks, Page Views |
+| **Funnel** | Multi-step conversions | View → Click → Purchase |
+
+Content editors can add multiple metrics and choose from common events: Page View, CTA Click, Scroll Milestone, Time Milestone, Form Submitted, Sign Up, Purchase, Outbound Link Click.
+
+### Experiment Templates
+
+| Template | Default Metrics | Description |
+|----------|-----------------|-------------|
+| **CTA Optimization** | CTA Clicks | Test button text, color, placement |
+| **Content Engagement** | Scroll Depth, Time on Page | Test headlines, descriptions |
+| **Conversion Funnel** | View to Click Conversion | Test entire user journeys |
+| **Custom** | (none) | Configure everything manually |
+
+### Targeting & Traffic
+
+- **Filter test accounts** - Exclude internal/test users from results
+- **Traffic allocation** - Control percentage rollout (10-100%)
+
+### Experiment Types
+
+- **Product** (Recommended) - For in-app features, CTAs, content. Tracks identified users across sessions.
+- **Web** - For landing pages and marketing. Session-based visitor tracking.
+
+### Variant Validation
+
+The modal validates CMS variants before allowing experiment creation:
+- Checks that content item is saved
+- Verifies at least one variant exists in the nested content list
+- Displays variant count and names on the review screen
+- Shows traffic split calculation per variant
+
+### Future Enhancements
+
+#### Custom Event Mapping per Component
+
+Different A/B test components may track different events:
+
+| Component | Primary Event | Secondary Events |
+|-----------|---------------|------------------|
+| ABTestHero | `ab_test_cta_click` | `scroll_milestone`, `time_milestone` |
+| ABTestPricing | `pricing_plan_selected` | `pricing_faq_expanded` |
+| ABTestForm | `form_submitted` | `form_field_focused` |
+
+**Proposed Solution:** Add a configuration setting per component model that maps to specific PostHog events.
+
+#### Advanced Targeting
+
+Extend targeting configuration to include:
+- **User properties**: Target by subscription tier, region, etc.
+- **Cohorts**: Use existing PostHog cohorts
+- **Geographic targeting**: Target by country or region
+
+#### Two-Way Variant Sync
+
+Sync between Agility CMS variants and PostHog:
+- **Import variants**: Pull existing feature flag variants into CMS
+- **Update variants**: Push CMS variant changes to PostHog
+- **Delete handling**: Archive experiments when content is deleted
+
+#### Experiment Scheduling
+
+Allow scheduling experiments:
+
+- **Start date**: Schedule experiment to start in the future
+- **End date**: Automatically conclude after a set period
+- **Sample size targets**: End when statistical significance is reached
+
+### Implementation Priority
+
+| Priority | Enhancement | Impact |
+|----------|-------------|--------|
+| **Medium** | Custom event mapping | Component-specific metrics |
+| **Medium** | Advanced targeting | Better experiment segmentation |
+| **Low** | Two-way variant sync | Keeps CMS and PostHog in sync |
+| **Low** | Experiment scheduling | Automated experiment lifecycle |
 
 ---
 

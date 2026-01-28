@@ -1,9 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { IAgilityContentItem } from '../types/IAgilityContentItem';
+import { openModal, useAgilityAppSDK, getManagementAPIToken } from '@agility/app-sdk';
 import { PostHogLoader } from './PostHogLoader';
-import { CreateExperiment } from './CreateExperiment';
 import { ExperimentResults, ExperimentResultsData } from './ExperimentResults';
 
 interface PostHogSidebarProps {
@@ -35,6 +34,7 @@ export interface Experiment {
 }
 
 export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId }: PostHogSidebarProps) => {
+	const { instance, contentItem, locale } = useAgilityAppSDK();
 	const [experiment, setExperiment] = useState<Experiment | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -129,8 +129,6 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 					}
 
 					const fullExperimentData = await fullExperimentResponse.json();
-
-					console.log('Full Experiment Data:', fullExperimentData);
 					setExperiment(fullExperimentData);
 
 					// Fetch results for this experiment
@@ -165,15 +163,76 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 		);
 	}
 
+	// Open modal to create experiment
+	const handleCreateExperiment = async () => {
+		if (!postHogProjectId || !postHogAPIKey) return;
+
+		// Get management token here where SDK is properly initialized
+		const managementToken = await getManagementAPIToken();
+
+		openModal<Experiment | null>({
+			title: "Create A/B Test Experiment",
+			name: "create-experiment",
+			props: {
+				experimentKey,
+				postHogProjectId,
+				postHogAPIKey,
+				// Pass content item context for variant fetching in modal
+				contentItem,
+				instance,
+				locale,
+				// Pass management token since SDK may not work in modal iframe
+				managementToken,
+			},
+			callback: (createdExperiment: Experiment | null | undefined) => {
+				if (createdExperiment) {
+					setExperiment(createdExperiment);
+					// Also fetch results for the new experiment
+					fetchResults(createdExperiment.id);
+				}
+			},
+		});
+	};
+
 	if (!experiment) {
-		// Show CreateExperiment component if no experiment found and we have the required props
+		// Show button to open CreateExperiment modal if no experiment found
 		if (postHogProjectId && !error) {
-			return <CreateExperiment
-				experimentKey={experimentKey}
-				postHogProjectId={postHogProjectId}
-				postHogAPIKey={postHogAPIKey}
-				onCreated={(experiment) => setExperiment(experiment)}
-			/>;
+			return (
+				<div className="max-w-2xl">
+					<div className="space-y-4 text-center">
+						<div className="w-16 h-16 bg-gray-100 mx-auto flex items-center justify-center rounded-full">
+							<img
+								src="https://posthog.com/brand/posthog-logo-stacked.svg"
+								alt="PostHog Logo"
+								className="w-10 h-10"
+							/>
+						</div>
+						<div>
+							<h3 className="text-lg font-medium text-gray-900">No Experiment Found</h3>
+							<p className="text-sm text-gray-600 mt-1">
+								No experiment found with feature flag key:{" "}
+								<span className="font-mono bg-gray-100 px-1 rounded">{experimentKey}</span>
+							</p>
+						</div>
+					</div>
+					<div className="space-y-3 mt-4">
+						<p className="text-sm text-gray-500 text-center">
+							Create a new experiment in PostHog with this feature flag key to get started.
+						</p>
+						<div className="flex justify-center">
+							<button
+								onClick={handleCreateExperiment}
+								className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:outline-none"
+							>
+								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+								</svg>
+								Create Experiment
+							</button>
+						</div>
+					</div>
+				</div>
+			);
 		}
 
 		return (
