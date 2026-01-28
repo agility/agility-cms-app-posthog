@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { IAgilityContentItem } from '../types/IAgilityContentItem';
 import { PostHogLoader } from './PostHogLoader';
 import { CreateExperiment } from './CreateExperiment';
+import { ExperimentResults, ExperimentResultsData } from './ExperimentResults';
 
 interface PostHogSidebarProps {
 	experimentKey: string;
@@ -37,6 +38,49 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 	const [experiment, setExperiment] = useState<Experiment | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	// Results state
+	const [results, setResults] = useState<ExperimentResultsData | null>(null);
+	const [resultsLoading, setResultsLoading] = useState(false);
+	const [resultsError, setResultsError] = useState<string | null>(null);
+
+	// Fetch experiment results
+	const fetchResults = async (experimentId: number) => {
+		if (!postHogAPIKey || !postHogProjectId) return;
+
+		setResultsLoading(true);
+		setResultsError(null);
+
+		try {
+			const response = await fetch(
+				`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/${experimentId}/results/`,
+				{
+					headers: {
+						'Authorization': `Bearer ${postHogAPIKey}`,
+						'Content-Type': 'application/json',
+					},
+				}
+			);
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					// No results yet - this is normal for new experiments
+					setResults(null);
+					return;
+				}
+				throw new Error(`Failed to fetch results: ${response.status}`);
+			}
+
+			const data = await response.json();
+			console.log('Experiment Results:', data);
+			setResults(data);
+		} catch (err) {
+			console.error('Error fetching results:', err);
+			setResultsError(err instanceof Error ? err.message : 'Failed to load results');
+		} finally {
+			setResultsLoading(false);
+		}
+	};
 
 	useEffect(() => {
 		const fetchExperiment = async () => {
@@ -84,6 +128,9 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 
 					console.log('Full Experiment Data:', fullExperimentData);
 					setExperiment(fullExperimentData);
+
+					// Fetch results for this experiment
+					fetchResults(fullExperimentData.id);
 
 				} else {
 					// Don't set error here - we'll show the CreateExperiment component instead
@@ -157,76 +204,66 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 	};
 
 	return (
-		<div className="max-w-2xl">
+		<div className="space-y-2">
+			{/* Header - compact */}
+			<div className="flex items-center justify-between gap-2">
+				<h2 className="text-sm font-semibold text-gray-900 truncate">{experiment.name}</h2>
+				<span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full shrink-0 ${getStatusColor(experiment)}`}>
+					{getStatusText(experiment)}
+				</span>
+			</div>
 
-			<div className="flex items-start justify-between flex-col sm:flex-row gap-2">
-				<div className='text-gray-500 uppercase text-xs font-semibold'>A/B Test Experiment</div>
-				<div className="flex justify-between gap-2 items-center w-full">
-					<h2 className="text-lg font-semibold text-gray-900">{experiment.name}</h2>
-					<div>
-						<span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(experiment)}`}>
-							{getStatusText(experiment)}
-						</span>
+			{experiment.description && (
+				<p className="text-xs text-gray-500 line-clamp-2">{experiment.description}</p>
+			)}
+
+			{/* Key info - compact inline layout */}
+			<div className="bg-gray-50 rounded p-2 space-y-1 text-xs">
+				<div className="flex justify-between">
+					<span className="text-gray-500">Flag</span>
+					<code className="text-gray-800 font-mono truncate ml-2 max-w-[60%] text-right">{experiment.feature_flag_key}</code>
+				</div>
+				<div className="flex justify-between">
+					<span className="text-gray-500">Type</span>
+					<span className="text-gray-800 capitalize">{experiment.type}</span>
+				</div>
+				<div className="flex justify-between">
+					<span className="text-gray-500">Started</span>
+					<span className="text-gray-800">{formatDate(experiment.start_date)}</span>
+				</div>
+				{experiment.end_date && (
+					<div className="flex justify-between">
+						<span className="text-gray-500">Ended</span>
+						<span className="text-gray-800">{formatDate(experiment.end_date)}</span>
 					</div>
-				</div>
-				<p className="text-sm text-gray-600 mt-1">{experiment.description || 'No description provided'}</p>
-
-				<div className="flex gap-2 shrink-0 justify-between w-full">
-
-					{postHogProjectId && (
-						<a
-							href={`https://app.posthog.com/project/${postHogProjectId}/experiments/${experiment.id}`}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors"
-						>
-							View in PostHog ↗
-						</a>
-					)}
-				</div>
+				)}
 			</div>
 
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-				<div>
-					<label className="text-sm font-medium text-gray-700">Experiment ID</label>
-					<p className="text-sm text-gray-900">{experiment.id}</p>
-				</div>
-
-				<div>
-					<label className="text-sm font-medium text-gray-700">Feature Flag Key</label>
-					<p className="text-xs sm:text-sm text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded break-all">
-						{experiment.feature_flag_key}
-					</p>
-				</div>
-
-				<div>
-					<label className="text-sm font-medium text-gray-700">Type</label>
-					<p className="text-sm text-gray-900 capitalize">{experiment.type}</p>
-				</div>
-
-				<div>
-					<label className="text-sm font-medium text-gray-700">Start Date</label>
-					<p className="text-sm text-gray-900">{formatDate(experiment.start_date)}</p>
-				</div>
-
-				<div>
-					<label className="text-sm font-medium text-gray-700">End Date</label>
-					<p className="text-sm text-gray-900">{formatDate(experiment.end_date)}</p>
-				</div>
-
-				<div>
-					<label className="text-sm font-medium text-gray-700">Created</label>
-					<p className="text-sm text-gray-900">{formatDate(experiment.created_at)}</p>
-				</div>
-			</div>
+			{/* PostHog link */}
+			{postHogProjectId && (
+				<a
+					href={`https://app.posthog.com/project/${postHogProjectId}/experiments/${experiment.id}`}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center text-xs text-indigo-600 hover:text-indigo-800"
+				>
+					View in PostHog →
+				</a>
+			)}
 
 			{experiment.conclusion_comment && (
-				<div className="border-t border-gray-200 pt-4">
-					<label className="text-sm font-medium text-gray-700">Conclusion Comment</label>
-					<p className="text-sm text-gray-900 mt-1 break-words">{experiment.conclusion_comment}</p>
+				<div className="bg-green-50 rounded p-2">
+					<p className="text-xs text-green-800">{experiment.conclusion_comment}</p>
 				</div>
 			)}
-		</div>
 
+			{/* Experiment Results Section */}
+			<ExperimentResults
+				results={results}
+				loading={resultsLoading}
+				error={resultsError}
+				experimentName={experiment.name}
+			/>
+		</div>
 	);
 }

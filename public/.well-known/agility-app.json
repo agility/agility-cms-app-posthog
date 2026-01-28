@@ -1,8 +1,8 @@
 {
-	"name": "PostHog (Beta)",
+	"name": "PostHog Analytics",
 	"documentationLink": "https://agilitycms.com/docs/apps/posthog",
-	"description": "Connect to your PostHog instance for A/B testing, with more features coming soon.",
-	"version": "1.0.0",
+	"description": "View content and page analytics, run A/B tests, and see live experiment results—all within the Agility CMS editor.",
+	"version": "1.2.0",
 	"__sdkVersion": "2.0.0",
 	"configValues": [
 		{
@@ -17,8 +17,14 @@
 		}
 	],
 	"capabilities": {
+		"dashboard": {
+			"description": "Site-wide analytics dashboard with page views, engagement metrics, top pages, and referrers."
+		},
 		"contentItemSidebar": {
-			"description": "For A/B testing."
+			"description": "Content analytics and A/B testing with live experiment results."
+		},
+		"pageSidebar": {
+			"description": "Page-level analytics including views, scroll depth, time on page, and referrers."
 		},
 		"installScreen": false
 	}
