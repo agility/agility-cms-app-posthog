@@ -6,7 +6,8 @@
       "WebFetch(domain:posthog.com)",
       "Bash(curl:*)",
       "Bash(npm run build:*)",
-      "WebFetch(domain:agilitycms.com)"
+      "WebFetch(domain:agilitycms.com)",
+      "Bash(python3:*)"
     ]
   }
 }
