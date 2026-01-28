@@ -9,10 +9,12 @@ import {
 	ExperimentMetric,
 	ExperimentTemplate,
 	TargetingCriteria,
+	PostHogExperimentPayload,
 	EXPERIMENT_TEMPLATES,
 	COMMON_EVENTS,
 	generateMetricId,
-	convertMetricToPostHogFormat
+	convertMetricToPostHogFormat,
+	extractVariantKey
 } from "@/types/ExperimentConfig"
 
 interface CreateExperimentProps {
@@ -152,8 +154,8 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 					setShowSyncOption(true)
 				}
 			}
-		} catch (error) {
-			console.log('Could not check for existing feature flag:', error)
+		} catch {
+			// Silently fail - feature flag check is optional
 		}
 	}, [postHogAPIKey, postHogProjectId, experimentKey])
 
@@ -212,10 +214,7 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 			}
 
 			contentList.items?.forEach(variantItem => {
-				let v = variantItem["Variant"] || variantItem["variant"]
-				if (!v && variantItem.length > 0) {
-					v = variantItem[0]["Variant"] || variantItem[0]["variant"]
-				}
+				const v = extractVariantKey(variantItem as Record<string, unknown>)
 				if (v) {
 					variants.push(v)
 				}
@@ -246,7 +245,7 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 			const postHogMetrics = finalMetrics.map(convertMetricToPostHogFormat)
 
 			// Build the experiment payload
-			const experimentPayload: any = {
+			const experimentPayload: PostHogExperimentPayload = {
 				name: experimentName,
 				description: experimentDescription || `A/B test experiment for feature flag key: ${experimentKey}`,
 				feature_flag_key: experimentKey,

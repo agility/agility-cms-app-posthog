@@ -129,8 +129,6 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 					}
 
 					const fullExperimentData = await fullExperimentResponse.json();
-
-					console.log('Full Experiment Data:', fullExperimentData);
 					setExperiment(fullExperimentData);
 
 					// Fetch results for this experiment

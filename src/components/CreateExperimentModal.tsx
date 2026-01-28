@@ -8,10 +8,12 @@ import {
 	ExperimentMetric,
 	ExperimentTemplate,
 	TargetingCriteria,
+	PostHogExperimentPayload,
 	EXPERIMENT_TEMPLATES,
 	COMMON_EVENTS,
 	generateMetricId,
-	convertMetricToPostHogFormat
+	convertMetricToPostHogFormat,
+	extractVariantKey
 } from "@/types/ExperimentConfig"
 
 interface CreateExperimentModalProps {
@@ -89,6 +91,35 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 	const [variantsLoading, setVariantsLoading] = useState(true)
 	const [variantsError, setVariantsError] = useState<string | null>(null)
 
+	// Check for existing feature flag in PostHog
+	const checkExistingFeatureFlag = useCallback(async () => {
+		if (!postHogAPIKey || !postHogProjectId) return
+
+		try {
+			const response = await fetch(
+				`https://app.posthog.com/api/projects/${postHogProjectId}/feature_flags/?search=${experimentKey}`,
+				{
+					headers: {
+						'Authorization': `Bearer ${postHogAPIKey}`,
+						'Content-Type': 'application/json',
+					},
+				}
+			)
+
+			if (response.ok) {
+				const data = await response.json()
+				const matchingFlag = data.results?.find((flag: { key: string }) => flag.key === experimentKey)
+				if (matchingFlag && matchingFlag.filters?.multivariate?.variants) {
+					const variants = matchingFlag.filters.multivariate.variants.map((v: { key: string }) => v.key)
+					setExistingVariants(variants)
+					setShowSyncOption(true)
+				}
+			}
+		} catch {
+			// Silently fail - feature flag check is optional
+		}
+	}, [postHogAPIKey, postHogProjectId, experimentKey])
+
 	// Fetch variants from Agility CMS on mount
 	useEffect(() => {
 		const fetchCmsVariants = async () => {
@@ -141,10 +172,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 
 				const variants: string[] = []
 				contentList.items?.forEach(variantItem => {
-					let v = variantItem["Variant"] || variantItem["variant"]
-					if (!v && variantItem.length > 0) {
-						v = variantItem[0]["Variant"] || variantItem[0]["variant"]
-					}
+					const v = extractVariantKey(variantItem as Record<string, unknown>)
 					if (v) {
 						variants.push(v)
 					}
@@ -160,7 +188,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 
 		fetchCmsVariants()
 		checkExistingFeatureFlag()
-	}, [instance, contentItem, locale])
+	}, [instance, contentItem, locale, managementToken, checkExistingFeatureFlag])
 
 	// Select template and move to configure step
 	const selectTemplate = useCallback((template: ExperimentTemplate) => {
@@ -210,35 +238,6 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			setNewFunnelSteps(newFunnelSteps.filter((_, i) => i !== index))
 		}
 	}, [newFunnelSteps])
-
-	// Check for existing feature flag in PostHog
-	const checkExistingFeatureFlag = useCallback(async () => {
-		if (!postHogAPIKey || !postHogProjectId) return
-
-		try {
-			const response = await fetch(
-				`https://app.posthog.com/api/projects/${postHogProjectId}/feature_flags/?search=${experimentKey}`,
-				{
-					headers: {
-						'Authorization': `Bearer ${postHogAPIKey}`,
-						'Content-Type': 'application/json',
-					},
-				}
-			)
-
-			if (response.ok) {
-				const data = await response.json()
-				const matchingFlag = data.results?.find((flag: any) => flag.key === experimentKey)
-				if (matchingFlag && matchingFlag.filters?.multivariate?.variants) {
-					const variants = matchingFlag.filters.multivariate.variants.map((v: any) => v.key)
-					setExistingVariants(variants)
-					setShowSyncOption(true)
-				}
-			}
-		} catch {
-			// Silently fail - feature flag check is optional
-		}
-	}, [postHogAPIKey, postHogProjectId, experimentKey])
 
 	// Create the experiment
 	const createExperiment = async () => {
@@ -294,10 +293,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			}
 
 			contentList.items?.forEach(variantItem => {
-				let v = variantItem["Variant"] || variantItem["variant"]
-				if (!v && variantItem.length > 0) {
-					v = variantItem[0]["Variant"] || variantItem[0]["variant"]
-				}
+				const v = extractVariantKey(variantItem as Record<string, unknown>)
 				if (v) {
 					variants.push(v)
 				}
@@ -328,7 +324,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			const postHogMetrics = finalMetrics.map(convertMetricToPostHogFormat)
 
 			// Build the experiment payload
-			const experimentPayload: any = {
+			const experimentPayload: PostHogExperimentPayload = {
 				name: experimentName,
 				description: experimentDescription || `A/B test experiment for feature flag key: ${experimentKey}`,
 				feature_flag_key: experimentKey,

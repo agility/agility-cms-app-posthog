@@ -25,7 +25,6 @@ const Page = () => {
 			try {
 				// Get the full page item data
 				const fullPageItem = await pageMethods.getPageItem()
-				console.log("Page Item:", fullPageItem)
 
 				if (fullPageItem) {
 					// Use CurrentItemID as the page identifier for analytics

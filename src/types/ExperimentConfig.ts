@@ -39,6 +39,45 @@ export interface ExperimentConfig {
 	start_immediately: boolean
 }
 
+// PostHog API types for experiment creation
+export interface PostHogEventsNode {
+	kind: 'EventsNode'
+	event: string
+	name: string
+	math?: 'total' | 'dau' | 'weekly_active' | 'monthly_active'
+}
+
+export interface PostHogMetric {
+	kind: 'ExperimentMetric'
+	metric_type: MetricType
+	name: string
+	source?: PostHogEventsNode
+	series?: PostHogEventsNode[]
+}
+
+export interface PostHogFeatureFlagVariant {
+	key: string
+	rollout_percentage: number
+}
+
+export interface PostHogExperimentPayload {
+	name: string
+	description: string
+	feature_flag_key: string
+	start_date: string
+	type: 'product' | 'web'
+	exposure_criteria: {
+		filterTestAccounts: boolean
+	}
+	metrics: PostHogMetric[]
+	parameters: {
+		feature_flag_variants: PostHogFeatureFlagVariant[]
+		recommended_running_time: number
+		recommended_sample_size: number
+		minimum_detectable_effect: number
+	}
+}
+
 // Predefined templates
 export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
 	{
@@ -131,15 +170,30 @@ export function generateMetricId(): string {
 	return `metric_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
+// Helper to extract variant key from Agility CMS content item
+// Handles both direct field access and array-wrapped items
+export function extractVariantKey(variantItem: Record<string, unknown>): string | null {
+	// Try direct field access (case-insensitive)
+	let variant = variantItem["Variant"] || variantItem["variant"]
+
+	// Handle array-wrapped items (nested content list items)
+	if (!variant && Array.isArray(variantItem) && variantItem.length > 0) {
+		const firstItem = variantItem[0] as Record<string, unknown>
+		variant = firstItem["Variant"] || firstItem["variant"]
+	}
+
+	return typeof variant === 'string' ? variant : null
+}
+
 // Helper to convert our metric format to PostHog API format
-export function convertMetricToPostHogFormat(metric: ExperimentMetric): any {
+export function convertMetricToPostHogFormat(metric: ExperimentMetric): PostHogMetric {
 	if (metric.metric_type === 'funnel' && metric.funnel_steps && metric.funnel_steps.length > 0) {
 		return {
 			kind: 'ExperimentMetric',
 			metric_type: 'funnel',
 			name: metric.name,
 			series: metric.funnel_steps.map(event => ({
-				kind: 'EventsNode',
+				kind: 'EventsNode' as const,
 				event: event,
 				name: event
 			}))
@@ -151,7 +205,7 @@ export function convertMetricToPostHogFormat(metric: ExperimentMetric): any {
 		metric_type: metric.metric_type,
 		name: metric.name,
 		source: {
-			kind: 'EventsNode',
+			kind: 'EventsNode' as const,
 			event: metric.event_name,
 			name: metric.event_name,
 			math: metric.math || 'total'
