@@ -14,7 +14,7 @@ import {
 	COMMON_EVENTS,
 	generateMetricId,
 	convertMetricToPostHogFormat,
-	extractVariantKey
+	extractAllVariantKeys
 } from "@/types/ExperimentConfig"
 
 interface CreateExperimentProps {
@@ -67,9 +67,9 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 	const [metrics, setMetrics] = useState<ExperimentMetric[]>([])
 	const [showAddMetric, setShowAddMetric] = useState(false)
 	const [newMetricName, setNewMetricName] = useState('')
-	const [newMetricEvent, setNewMetricEvent] = useState('ab_test_cta_click')
+	const [newMetricEvent, setNewMetricEvent] = useState('cta_clicked')
 	const [newMetricType, setNewMetricType] = useState<'mean' | 'funnel'>('mean')
-	const [newFunnelSteps, setNewFunnelSteps] = useState<string[]>(['$pageview', 'ab_test_cta_click'])
+	const [newFunnelSteps, setNewFunnelSteps] = useState<string[]>(['$pageview', 'cta_clicked'])
 
 	// Targeting state
 	const [targeting, setTargeting] = useState<TargetingCriteria>({
@@ -101,9 +101,9 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 		setMetrics([...metrics, newMetric])
 		setShowAddMetric(false)
 		setNewMetricName('')
-		setNewMetricEvent('ab_test_cta_click')
+		setNewMetricEvent('cta_clicked')
 		setNewMetricType('mean')
-		setNewFunnelSteps(['$pageview', 'ab_test_cta_click'])
+		setNewFunnelSteps(['$pageview', 'cta_clicked'])
 	}, [metrics, newMetricName, newMetricEvent, newMetricType, newFunnelSteps])
 
 	// Remove a metric
@@ -199,7 +199,8 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 
 			let guid = instance.guid || ""
 			const listParams = new ListParams()
-			listParams.fields = "variant"
+			// Request both possible field names (case sensitivity varies)
+			listParams.fields = "variant,Variant"
 
 			const contentList = await apiClient.contentMethods.getContentList(
 				variantListReferenceName,
@@ -213,12 +214,8 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 				return
 			}
 
-			contentList.items?.forEach(variantItem => {
-				const v = extractVariantKey(variantItem as Record<string, unknown>)
-				if (v) {
-					variants.push(v)
-				}
-			})
+			// Extract all variants (handles both single items and nested arrays)
+			variants = extractAllVariantKeys(contentList.items || [])
 
 			// Create feature flag variants
 			const allVariants = ["control", ...variants]
@@ -237,7 +234,7 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 				id: 'default_cta',
 				name: 'CTA Clicks',
 				metric_type: 'mean' as const,
-				event_name: 'ab_test_cta_click',
+				event_name: 'cta_clicked',
 				math: 'total' as const
 			}]
 
@@ -703,7 +700,7 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 						id: 'default',
 						name: 'CTA Clicks (default)',
 						metric_type: 'mean',
-						event_name: 'ab_test_cta_click'
+						event_name: 'cta_clicked'
 					}]).map((metric) => (
 						<div key={metric.id} className="text-xs p-2 bg-blue-50 rounded flex items-center gap-2">
 							<span className="text-blue-700">{metric.name}</span>

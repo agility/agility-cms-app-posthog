@@ -90,7 +90,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
 				id: 'cta_clicks',
 				name: 'CTA Clicks',
 				metric_type: 'mean',
-				event_name: 'ab_test_cta_click',
+				event_name: 'cta_clicked',
 				description: 'Total clicks on the call-to-action',
 				math: 'total'
 			}
@@ -136,7 +136,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
 				metric_type: 'funnel',
 				event_name: '$pageview',
 				description: 'Conversion from page view to CTA click',
-				funnel_steps: ['$pageview', 'ab_test_cta_click']
+				funnel_steps: ['$pageview', 'cta_clicked']
 			}
 		],
 		recommended_duration_days: 21,
@@ -154,15 +154,17 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
 ]
 
 // Common events that can be tracked
+// These match the standard event names from the Agility demo site analytics abstraction
 export const COMMON_EVENTS = [
 	{ value: '$pageview', label: 'Page View', description: 'Standard page view event' },
-	{ value: 'ab_test_cta_click', label: 'CTA Click', description: 'Click on call-to-action button' },
+	{ value: 'cta_clicked', label: 'CTA Click', description: 'Click on call-to-action button' },
+	{ value: 'experiment_interaction', label: 'Experiment Interaction', description: 'User interacted with A/B test variant (e.g., CTA click)' },
 	{ value: 'scroll_milestone', label: 'Scroll Milestone', description: 'User scrolled to 25%, 50%, 75%, or 100%' },
 	{ value: 'time_milestone', label: 'Time Milestone', description: 'User spent 30s, 60s, 2m, or 5m on page' },
 	{ value: 'outbound_link_clicked', label: 'Outbound Link Click', description: 'Click on external link' },
 	{ value: 'form_submitted', label: 'Form Submitted', description: 'Form submission event' },
-	{ value: 'signup', label: 'Sign Up', description: 'User registration event' },
-	{ value: 'purchase', label: 'Purchase', description: 'Purchase completion event' }
+	{ value: 'conversion', label: 'Conversion', description: 'Generic conversion goal reached' },
+	{ value: 'demo_requested', label: 'Demo Requested', description: 'Demo/contact request submitted' }
 ]
 
 // Helper function to generate a metric ID
@@ -174,15 +176,34 @@ export function generateMetricId(): string {
 // Handles both direct field access and array-wrapped items
 export function extractVariantKey(variantItem: Record<string, unknown>): string | null {
 	// Try direct field access (case-insensitive)
-	let variant = variantItem["Variant"] || variantItem["variant"]
+	const variant = variantItem["Variant"] || variantItem["variant"]
+	return typeof variant === 'string' ? variant : null
+}
 
-	// Handle array-wrapped items (nested content list items)
-	if (!variant && Array.isArray(variantItem) && variantItem.length > 0) {
-		const firstItem = variantItem[0] as Record<string, unknown>
-		variant = firstItem["Variant"] || firstItem["variant"]
+// Helper to extract ALL variant keys from a content list response
+// The API may return items as individual objects OR as an array of objects
+export function extractAllVariantKeys(items: unknown[]): string[] {
+	const variants: string[] = []
+
+	for (const item of items) {
+		// If the item itself is an array (nested content list returns all items in one array)
+		if (Array.isArray(item)) {
+			for (const nestedItem of item) {
+				const v = extractVariantKey(nestedItem as Record<string, unknown>)
+				if (v) {
+					variants.push(v)
+				}
+			}
+		} else {
+			// Single item object
+			const v = extractVariantKey(item as Record<string, unknown>)
+			if (v) {
+				variants.push(v)
+			}
+		}
 	}
 
-	return typeof variant === 'string' ? variant : null
+	return variants
 }
 
 // Helper to convert our metric format to PostHog API format

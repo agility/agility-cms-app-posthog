@@ -13,7 +13,7 @@ import {
 	COMMON_EVENTS,
 	generateMetricId,
 	convertMetricToPostHogFormat,
-	extractVariantKey
+	extractAllVariantKeys
 } from "@/types/ExperimentConfig"
 
 interface CreateExperimentModalProps {
@@ -72,9 +72,9 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 	const [metrics, setMetrics] = useState<ExperimentMetric[]>([])
 	const [showAddMetric, setShowAddMetric] = useState(false)
 	const [newMetricName, setNewMetricName] = useState('')
-	const [newMetricEvent, setNewMetricEvent] = useState('ab_test_cta_click')
+	const [newMetricEvent, setNewMetricEvent] = useState('cta_clicked')
 	const [newMetricType, setNewMetricType] = useState<'mean' | 'funnel'>('mean')
-	const [newFunnelSteps, setNewFunnelSteps] = useState<string[]>(['$pageview', 'ab_test_cta_click'])
+	const [newFunnelSteps, setNewFunnelSteps] = useState<string[]>(['$pageview', 'cta_clicked'])
 
 	// Targeting state
 	const [targeting, setTargeting] = useState<TargetingCriteria>({
@@ -126,25 +126,45 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			setVariantsLoading(true)
 			setVariantsError(null)
 
+			// Debug: Log props passed to modal
+			console.log('Modal props:', {
+				contentItem,
+				instance,
+				locale,
+				managementToken: managementToken ? '(present)' : '(missing)',
+				experimentKey
+			})
+
 			try {
 				const item = contentItem as IAgilityContentItem | null
 
 				if (!item || item.contentID < 1) {
+					console.log('Error: Content item missing or not saved')
 					setVariantsError("Please save this content item first before creating an experiment.")
 					setVariantsLoading(false)
 					return
 				}
 
 				if (!instance || !locale) {
+					console.log('Error: Instance or locale missing')
 					setVariantsError("Could not access Agility instance details.")
 					setVariantsLoading(false)
 					return
 				}
 
 				const variantListReferenceName = item.values["Variants"]
+				console.log('Variant list reference name:', variantListReferenceName)
 
 				if (!variantListReferenceName) {
+					console.log('Error: No Variants field found in content item')
 					setVariantsError("No variants field found. Make sure this component has a 'Variants' nested content list.")
+					setVariantsLoading(false)
+					return
+				}
+
+				if (!managementToken) {
+					console.log('Error: Management token is missing')
+					setVariantsError("Could not authenticate with Agility CMS. Please refresh and try again.")
 					setVariantsLoading(false)
 					return
 				}
@@ -154,15 +174,20 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				const apiClient = new mgmtApi.ApiClient(options)
 
 				const guid = instance.guid || ""
-				const listParams = new ListParams()
-				listParams.fields = "variant"
+				console.log('Fetching variants from Agility:', { guid, locale, variantListReferenceName })
 
+				const listParams = new ListParams()
+				// Request both possible field names (case sensitivity varies)
+				listParams.fields = "variant,Variant"
+
+				console.log('Calling getContentList...')
 				const contentList = await apiClient.contentMethods.getContentList(
 					variantListReferenceName,
 					guid,
 					locale,
 					listParams
 				)
+				console.log('getContentList returned:', contentList)
 
 				if (!contentList || contentList?.totalCount === 0) {
 					setCmsVariants([])
@@ -170,16 +195,18 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					return
 				}
 
-				const variants: string[] = []
-				contentList.items?.forEach(variantItem => {
-					const v = extractVariantKey(variantItem as Record<string, unknown>)
-					if (v) {
-						variants.push(v)
-					}
+				// Debug: Log what we're getting from the API
+				console.log('Variants API response:', {
+					totalCount: contentList.totalCount,
+					items: contentList.items
 				})
 
+				// Extract all variants (handles both single items and nested arrays)
+				const variants = extractAllVariantKeys(contentList.items || [])
+				console.log('Final variants array:', variants)
 				setCmsVariants(variants)
 			} catch (error) {
+				console.error('Error fetching variants from Agility:', error)
 				setVariantsError("Failed to load variants from Agility CMS.")
 			} finally {
 				setVariantsLoading(false)
@@ -210,9 +237,9 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 		setMetrics([...metrics, newMetric])
 		setShowAddMetric(false)
 		setNewMetricName('')
-		setNewMetricEvent('ab_test_cta_click')
+		setNewMetricEvent('cta_clicked')
 		setNewMetricType('mean')
-		setNewFunnelSteps(['$pageview', 'ab_test_cta_click'])
+		setNewFunnelSteps(['$pageview', 'cta_clicked'])
 	}, [metrics, newMetricName, newMetricEvent, newMetricType, newFunnelSteps])
 
 	// Remove a metric
@@ -277,7 +304,8 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 
 			let guid = instance.guid || ""
 			const listParams = new ListParams()
-			listParams.fields = "variant"
+			// Request both possible field names (case sensitivity varies)
+			listParams.fields = "variant,Variant"
 
 			const contentList = await apiClient.contentMethods.getContentList(
 				variantListReferenceName,
@@ -292,12 +320,8 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				return
 			}
 
-			contentList.items?.forEach(variantItem => {
-				const v = extractVariantKey(variantItem as Record<string, unknown>)
-				if (v) {
-					variants.push(v)
-				}
-			})
+			// Extract all variants (handles both single items and nested arrays)
+			variants = extractAllVariantKeys(contentList.items || [])
 
 			// Create feature flag variants
 			const allVariants = ["control", ...variants]
@@ -316,7 +340,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				id: 'default_cta',
 				name: 'CTA Clicks',
 				metric_type: 'mean' as const,
-				event_name: 'ab_test_cta_click',
+				event_name: 'cta_clicked',
 				math: 'total' as const
 			}]
 
@@ -913,7 +937,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 						id: 'default',
 						name: 'CTA Clicks (default)',
 						metric_type: 'mean',
-						event_name: 'ab_test_cta_click'
+						event_name: 'cta_clicked'
 					}]).map((metric) => (
 						<div key={metric.id} className="p-3 bg-blue-50 rounded-lg flex items-center gap-3">
 							<div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
