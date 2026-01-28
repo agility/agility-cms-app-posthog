@@ -258,6 +258,14 @@ export function PageAnalytics({
 					<p className="text-gray-400 text-xs mt-1">
 						Analytics will appear once this page receives traffic.
 					</p>
+					<a
+						href="https://agilitycms.com/docs/apps/posthog"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-block mt-2 text-xs text-indigo-600 hover:text-indigo-800"
+					>
+						Learn how to send analytics →
+					</a>
 				</div>
 			) : (
 				<>

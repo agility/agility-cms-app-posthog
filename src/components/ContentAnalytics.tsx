@@ -258,6 +258,14 @@ export function ContentAnalytics({
 				<div className="text-center py-3 bg-gray-50 rounded">
 					<p className="text-gray-500 text-xs">No data yet</p>
 					<p className="text-gray-400 text-[10px] mt-0.5">Waiting for traffic</p>
+					<a
+						href="https://agilitycms.com/docs/apps/posthog"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-block mt-2 text-[10px] text-indigo-600 hover:text-indigo-800"
+					>
+						Learn how to send analytics →
+					</a>
 				</div>
 			) : (
 				<>

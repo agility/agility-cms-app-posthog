@@ -249,6 +249,14 @@ export function Dashboard({ postHogAPIKey, postHogProjectId }: DashboardProps) {
 		return (
 			<div className="text-center py-8 text-gray-500">
 				<p>No analytics data available yet.</p>
+				<a
+					href="https://agilitycms.com/docs/apps/posthog"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-800"
+				>
+					Learn how to send analytics →
+				</a>
 			</div>
 		);
 	}
