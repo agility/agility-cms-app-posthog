@@ -7,7 +7,8 @@
       "Bash(curl:*)",
       "Bash(npm run build:*)",
       "WebFetch(domain:agilitycms.com)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(gh pr list:*)"
     ]
   }
 }
