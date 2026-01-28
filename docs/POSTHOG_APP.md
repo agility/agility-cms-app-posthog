@@ -1134,9 +1134,35 @@ The app uses these PostHog API endpoints:
 |----------|---------|
 | `GET /api/projects/{id}/experiments/` | List all experiments |
 | `GET /api/projects/{id}/experiments/{id}/` | Get experiment details |
-| `GET /api/projects/{id}/experiments/{id}/results/` | Get experiment results |
+| `POST /api/projects/{id}/query/` | Query experiment results and run HogQL analytics queries |
 | `POST /api/projects/{id}/experiments/` | Create new experiment |
-| `POST /api/projects/{id}/query/` | Run HogQL analytics queries |
+
+### Experiment Results Query
+
+Experiment results are fetched using PostHog's Query API with the `ExperimentQuery` kind:
+
+```typescript
+// POST /api/projects/{projectId}/query/
+{
+  "query": {
+    "kind": "ExperimentQuery",
+    "experiment_id": 123,
+    "metric": {
+      "kind": "ExperimentMetric",
+      "name": "CTA Clicks",
+      "uuid": "metric-uuid",
+      "series": [{ "kind": "EventsNode", "event": "cta_click" }],
+      "metric_type": "funnel"
+    }
+  }
+}
+```
+
+The response includes:
+- `baseline`: Control variant data with `number_of_samples`, `step_counts`, `chance_to_win`
+- `variant_results`: Array of other variants with the same structure
+- `significant`: Whether results are statistically significant
+- `credible_intervals`: 95% confidence intervals for each variant
 
 ### HogQL Queries Used
 
@@ -1236,7 +1262,9 @@ LIMIT 5
 
 1. **Check experiment has started** - Results appear after experiment begins
 2. **Verify users are being exposed** - Check PostHog for `$feature_flag_called` events
-3. **API permissions** - Key needs access to experiment results endpoint
+3. **API permissions** - Key needs read access to experiments and query endpoints
+4. **Check metrics are configured** - Experiments need at least one metric to show results
+5. **Wait for data** - Results require sufficient exposures to calculate statistics
 
 ### Create Experiment Fails
 
