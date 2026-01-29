@@ -126,44 +126,30 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			setVariantsLoading(true)
 			setVariantsError(null)
 
-			// Debug: Log props passed to modal
-			console.log('Modal props:', {
-				contentItem,
-				instance,
-				locale,
-				managementToken: managementToken ? '(present)' : '(missing)',
-				experimentKey
-			})
-
 			try {
 				const item = contentItem as IAgilityContentItem | null
 
 				if (!item || item.contentID < 1) {
-					console.log('Error: Content item missing or not saved')
 					setVariantsError("Please save this content item first before creating an experiment.")
 					setVariantsLoading(false)
 					return
 				}
 
 				if (!instance || !locale) {
-					console.log('Error: Instance or locale missing')
 					setVariantsError("Could not access Agility instance details.")
 					setVariantsLoading(false)
 					return
 				}
 
 				const variantListReferenceName = item.values["Variants"]
-				console.log('Variant list reference name:', variantListReferenceName)
 
 				if (!variantListReferenceName) {
-					console.log('Error: No Variants field found in content item')
 					setVariantsError("No variants field found. Make sure this component has a 'Variants' nested content list.")
 					setVariantsLoading(false)
 					return
 				}
 
 				if (!managementToken) {
-					console.log('Error: Management token is missing')
 					setVariantsError("Could not authenticate with Agility CMS. Please refresh and try again.")
 					setVariantsLoading(false)
 					return
@@ -174,20 +160,17 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				const apiClient = new mgmtApi.ApiClient(options)
 
 				const guid = instance.guid || ""
-				console.log('Fetching variants from Agility:', { guid, locale, variantListReferenceName })
 
 				const listParams = new ListParams()
 				// Request both possible field names (case sensitivity varies)
 				listParams.fields = "variant,Variant"
 
-				console.log('Calling getContentList...')
 				const contentList = await apiClient.contentMethods.getContentList(
 					variantListReferenceName,
 					guid,
 					locale,
 					listParams
 				)
-				console.log('getContentList returned:', contentList)
 
 				if (!contentList || contentList?.totalCount === 0) {
 					setCmsVariants([])
@@ -195,15 +178,8 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					return
 				}
 
-				// Debug: Log what we're getting from the API
-				console.log('Variants API response:', {
-					totalCount: contentList.totalCount,
-					items: contentList.items
-				})
-
 				// Extract all variants (handles both single items and nested arrays)
 				const variants = extractAllVariantKeys(contentList.items || [])
-				console.log('Final variants array:', variants)
 				setCmsVariants(variants)
 			} catch (error) {
 				console.error('Error fetching variants from Agility:', error)

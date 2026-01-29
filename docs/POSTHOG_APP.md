@@ -1356,7 +1356,7 @@ Different A/B test components may track different events:
 
 | Component | Primary Event | Secondary Events |
 |-----------|---------------|------------------|
-| ABTestHero | `ab_test_cta_click` | `scroll_milestone`, `time_milestone` |
+| ABTestHero | `cta_clicked` | `experiment_interaction`, `scroll_milestone`, `time_milestone` |
 | ABTestPricing | `pricing_plan_selected` | `pricing_faq_expanded` |
 | ABTestForm | `form_submitted` | `form_field_focused` |
 

@@ -29,17 +29,6 @@ export default function CreateExperimentPage() {
 
 	const props = modalProps as CreateExperimentModalProps | undefined
 
-	// Debug: Log what props are received
-	console.log('Modal page received props:', {
-		hasProps: !!props,
-		experimentKey: props?.experimentKey,
-		postHogProjectId: props?.postHogProjectId,
-		hasContentItem: !!props?.contentItem,
-		hasInstance: !!props?.instance,
-		locale: props?.locale,
-		hasManagementToken: !!props?.managementToken
-	})
-
 	if (!props) {
 		return (
 			<div className="p-4 text-center text-red-600">
