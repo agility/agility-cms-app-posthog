@@ -110,42 +110,43 @@ export async function GET(
 		}
 		console.log('[DEBUG] Found metrics:', experiment.metrics.length);
 
-		// Step 2: Query results for each metric using PostHog's ExperimentQuery
-		// This uses POST /api/projects/{id}/query/ with kind: "ExperimentQuery"
-		const metricResults = await Promise.all(
-			experiment.metrics.map(async (metric) => {
-				const queryResponse = await fetch(
-					`https://us.posthog.com/api/projects/${projectId}/query/`,
-					{
-						method: 'POST',
-						headers: {
-							'Authorization': `Bearer ${apiKey}`,
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							query: {
-								kind: 'ExperimentQuery',
-								experiment_id: parseInt(experimentId),
-								metric: metric
-							}
-						})
-					}
-				);
-
-				if (!queryResponse.ok) {
-					// Log error but don't fail the entire request
-					console.log('[DEBUG] Query failed for metric:', metric.name, 'status:', queryResponse.status);
-					return null;
-				}
-
-				const result = await queryResponse.json();
-				console.log('[DEBUG] Raw query result for metric:', metric.name, JSON.stringify(result, null, 2));
-				return { metric, result };
-			})
+		// Step 2: Query results using ExperimentQuery without passing metric
+		// This lets PostHog return results for all configured metrics
+		const queryResponse = await fetch(
+			`https://us.posthog.com/api/projects/${projectId}/query/`,
+			{
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					query: {
+						kind: 'ExperimentQuery',
+						experiment_id: parseInt(experimentId),
+					},
+					refresh: 'blocking'
+				})
+			}
 		);
 
-		// Filter out any failed metric queries
-		const validResults = metricResults.filter((r): r is NonNullable<typeof r> => r !== null);
+		if (!queryResponse.ok) {
+			console.log('[DEBUG] Query failed, status:', queryResponse.status);
+			const errorText = await queryResponse.text();
+			console.log('[DEBUG] Query error:', errorText);
+			return NextResponse.json({ noResults: true, reason: `Query failed: ${queryResponse.status}` });
+		}
+
+		const queryResult = await queryResponse.json();
+		console.log('[DEBUG] Raw query result:', JSON.stringify(queryResult, null, 2));
+
+		// Build metric results from the single query response
+		const metricResults = experiment.metrics.map(metric => ({
+			metric,
+			result: queryResult
+		}));
+
+		const validResults = metricResults;
 		console.log('[DEBUG] Valid results count:', validResults.length);
 
 		if (validResults.length === 0) {
