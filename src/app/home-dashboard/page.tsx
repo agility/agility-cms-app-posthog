@@ -10,7 +10,7 @@ const Page = () => {
 	const { appInstallContext, initializing } = useAgilityAppSDK()
 
 	useEffect(() => {
-		setHeight({ height: 550 })
+		setHeight({ height: 1000 })
 	}, [])
 
 	const postHogAPIKey = useMemo(() => {
