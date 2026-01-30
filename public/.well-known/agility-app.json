@@ -17,7 +17,7 @@
 		}
 	],
 	"capabilities": {
-		"dashboard": {
+		"homeDashboard": {
 			"description": "Site-wide analytics dashboard with page views, engagement metrics, top pages, and referrers."
 		},
 		"contentItemSidebar": {
