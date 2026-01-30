@@ -185,19 +185,14 @@ export const ExperimentResults = ({ results, loading, error, experimentName }: E
 							</div>
 							{metric.variants && (
 								<div className="space-y-0.5">
-									{metric.variants.map((v) => {
-										const conversionRate = v.exposure && v.success_count !== undefined
-											? (v.success_count / v.exposure) * 100
-											: null;
-										return (
-											<div key={v.key} className="flex justify-between text-[11px]">
-												<span className="text-gray-500 capitalize">{v.key.replace(/_/g, ' ')}</span>
-												<span className="font-medium text-gray-700">
-													{conversionRate !== null ? `${conversionRate.toFixed(1)}%` : v.count?.toLocaleString() || '-'}
-												</span>
-											</div>
-										);
-									})}
+									{metric.variants.map((v) => (
+										<div key={v.key} className="flex justify-between text-[11px]">
+											<span className="text-gray-500 capitalize">{v.key.replace(/_/g, ' ')}</span>
+											<span className="font-medium text-gray-700">
+												{v.count?.toLocaleString() ?? v.success_count?.toLocaleString() ?? '-'}
+											</span>
+										</div>
+									))}
 								</div>
 							)}
 						</div>
