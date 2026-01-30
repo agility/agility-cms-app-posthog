@@ -1,13 +1,17 @@
 "use client"
 
-import { useAgilityAppSDK } from "@agility/app-sdk"
-import { useMemo } from "react"
+import { useAgilityAppSDK, setHeight } from "@agility/app-sdk"
+import { useMemo, useEffect } from "react"
 
 import { Dashboard } from "@/components/Dashboard"
 import Loader from "@/components/Loader"
 
 const Page = () => {
 	const { appInstallContext, initializing } = useAgilityAppSDK()
+
+	useEffect(() => {
+		setHeight({ height: 550 })
+	}, [])
 
 	const postHogAPIKey = useMemo(() => {
 		return appInstallContext?.configuration?.POSTHOG_API_KEY || null
