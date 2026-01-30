@@ -15,7 +15,9 @@
       "WebFetch(domain:us.posthog.com)",
       "mcp__posthog__experiment-get",
       "Bash(grep:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(bash)",
+      "Bash(EOFCURL)"
     ]
   }
 }

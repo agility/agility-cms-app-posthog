@@ -110,43 +110,77 @@ export async function GET(
 		}
 		console.log('[DEBUG] Found metrics:', experiment.metrics.length);
 
-		// Step 2: Query results using ExperimentQuery without passing metric
-		// This lets PostHog return results for all configured metrics
-		const queryResponse = await fetch(
-			`https://us.posthog.com/api/projects/${projectId}/query/`,
+		// Step 2: Try the direct experiment results endpoint first
+		// This endpoint returns pre-computed results without needing to query
+		const resultsResponse = await fetch(
+			`https://us.posthog.com/api/projects/${projectId}/experiments/${experimentId}/results`,
 			{
-				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${apiKey}`,
 					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify({
-					query: {
-						kind: 'ExperimentQuery',
-						experiment_id: parseInt(experimentId),
-					},
-					refresh: 'blocking'
-				})
 			}
 		);
 
-		if (!queryResponse.ok) {
-			console.log('[DEBUG] Query failed, status:', queryResponse.status);
-			const errorText = await queryResponse.text();
-			console.log('[DEBUG] Query error:', errorText);
-			return NextResponse.json({ noResults: true, reason: `Query failed: ${queryResponse.status}` });
+		console.log('[DEBUG] Results endpoint status:', resultsResponse.status);
+
+		if (resultsResponse.ok) {
+			const directResults = await resultsResponse.json();
+			console.log('[DEBUG] Direct results:', JSON.stringify(directResults, null, 2));
+
+			// If we got direct results, return them with minimal transformation
+			if (directResults && (directResults.result || directResults.variants || directResults.insight)) {
+				return NextResponse.json({
+					...directResults,
+					_debug: {
+						source: 'direct_results_endpoint',
+						raw: directResults
+					}
+				});
+			}
 		}
 
-		const queryResult = await queryResponse.json();
-		console.log('[DEBUG] Raw query result:', JSON.stringify(queryResult, null, 2));
+		// Fallback: Query results for each metric using PostHog's ExperimentQuery
+		console.log('[DEBUG] Falling back to ExperimentQuery for each metric');
+		const metricResults = await Promise.all(
+			experiment.metrics.map(async (metric) => {
+				const queryBody = {
+					query: {
+						kind: 'ExperimentQuery',
+						experiment_id: parseInt(experimentId),
+						metric: metric
+					},
+					refresh: 'force_blocking'
+				};
+				console.log('[DEBUG] Query body for metric', metric.name, ':', JSON.stringify(queryBody, null, 2));
 
-		// Build metric results from the single query response
-		const metricResults = experiment.metrics.map(metric => ({
-			metric,
-			result: queryResult
-		}));
+				const queryResponse = await fetch(
+					`https://us.posthog.com/api/projects/${projectId}/query/`,
+					{
+						method: 'POST',
+						headers: {
+							'Authorization': `Bearer ${apiKey}`,
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify(queryBody)
+					}
+				);
 
-		const validResults = metricResults;
+				console.log('[DEBUG] Query response status for', metric.name, ':', queryResponse.status);
+
+				if (!queryResponse.ok) {
+					const errorText = await queryResponse.text();
+					console.log('[DEBUG] Query error for', metric.name, ':', errorText);
+					return null;
+				}
+
+				const result = await queryResponse.json();
+				console.log('[DEBUG] Raw query result for', metric.name, ':', JSON.stringify(result, null, 2));
+				return { metric, result };
+			})
+		);
+
+		const validResults = metricResults.filter((r): r is NonNullable<typeof r> => r !== null);
 		console.log('[DEBUG] Valid results count:', validResults.length);
 
 		if (validResults.length === 0) {
