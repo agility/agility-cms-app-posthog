@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { PostHogLoader } from './PostHogLoader';
+import { DashboardSkeleton } from './DashboardSkeleton';
 import { runHogQLQuery, type PostHogConfig } from '../lib/posthog';
 
 interface DashboardProps {
@@ -233,7 +233,7 @@ export function Dashboard({ postHogAPIKey, postHogProjectId }: DashboardProps) {
 	}, [postHogAPIKey, postHogProjectId, dateRange]);
 
 	if (loading) {
-		return <PostHogLoader title="Loading Dashboard" message="Fetching analytics from PostHog..." />;
+		return <DashboardSkeleton />;
 	}
 
 	if (error) {
