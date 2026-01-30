@@ -101,47 +101,13 @@ export async function GET(
 		}
 
 		const experiment: Experiment = await experimentResponse.json();
-		console.log('[DEBUG] Experiment data:', JSON.stringify(experiment, null, 2));
 
 		// Experiments without metrics can't have results
 		if (!experiment.metrics || experiment.metrics.length === 0) {
-			console.log('[DEBUG] No metrics configured for experiment');
 			return NextResponse.json({ noResults: true, reason: 'No metrics configured' });
 		}
-		console.log('[DEBUG] Found metrics:', experiment.metrics.length);
 
-		// Step 2: Try the direct experiment results endpoint first
-		// This endpoint returns pre-computed results without needing to query
-		const resultsResponse = await fetch(
-			`https://us.posthog.com/api/projects/${projectId}/experiments/${experimentId}/results`,
-			{
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json',
-				},
-			}
-		);
-
-		console.log('[DEBUG] Results endpoint status:', resultsResponse.status);
-
-		if (resultsResponse.ok) {
-			const directResults = await resultsResponse.json();
-			console.log('[DEBUG] Direct results:', JSON.stringify(directResults, null, 2));
-
-			// If we got direct results, return them with minimal transformation
-			if (directResults && (directResults.result || directResults.variants || directResults.insight)) {
-				return NextResponse.json({
-					...directResults,
-					_debug: {
-						source: 'direct_results_endpoint',
-						raw: directResults
-					}
-				});
-			}
-		}
-
-		// Fallback: Query results for each metric using PostHog's ExperimentQuery
-		console.log('[DEBUG] Falling back to ExperimentQuery for each metric');
+		// Step 2: Query results for each metric using PostHog's ExperimentQuery
 		const metricResults = await Promise.all(
 			experiment.metrics.map(async (metric) => {
 				const queryBody = {
@@ -152,7 +118,6 @@ export async function GET(
 					},
 					refresh: 'force_blocking'
 				};
-				console.log('[DEBUG] Query body for metric', metric.name, ':', JSON.stringify(queryBody, null, 2));
 
 				const queryResponse = await fetch(
 					`https://us.posthog.com/api/projects/${projectId}/query/`,
@@ -166,39 +131,25 @@ export async function GET(
 					}
 				);
 
-				console.log('[DEBUG] Query response status for', metric.name, ':', queryResponse.status);
-
 				if (!queryResponse.ok) {
-					const errorText = await queryResponse.text();
-					console.log('[DEBUG] Query error for', metric.name, ':', errorText);
 					return null;
 				}
 
 				const result = await queryResponse.json();
-				console.log('[DEBUG] Raw query result for', metric.name, ':', JSON.stringify(result, null, 2));
 				return { metric, result };
 			})
 		);
 
 		const validResults = metricResults.filter((r): r is NonNullable<typeof r> => r !== null);
-		console.log('[DEBUG] Valid results count:', validResults.length);
 
 		if (validResults.length === 0) {
 			return NextResponse.json({ noResults: true, reason: 'No valid metric results' });
 		}
 
 		// Step 3: Transform results into the format expected by the frontend
-		const transformedResults = transformResults(validResults, experiment);
-		console.log('[DEBUG] Transformed results:', JSON.stringify(transformedResults, null, 2));
+		const transformedResults = transformResults(validResults);
 
-		// Include debug info in response
-		return NextResponse.json({
-			...transformedResults,
-			_debug: {
-				rawResults: validResults,
-				experimentMetrics: experiment.metrics
-			}
-		});
+		return NextResponse.json(transformedResults);
 	} catch (error) {
 		return NextResponse.json(
 			{ error: 'Failed to fetch experiment results' },
@@ -221,7 +172,7 @@ export async function GET(
  * - significant: whether results are statistically significant
  * - primary_metric_results: metric-specific conversion data
  */
-function transformResults(metricResults: MetricResult[], experiment: Experiment) {
+function transformResults(metricResults: MetricResult[]) {
 	// Collect all variant data (baseline + other variants)
 	const allVariants: Array<{
 		key: string;
@@ -233,9 +184,6 @@ function transformResults(metricResults: MetricResult[], experiment: Experiment)
 
 	// Use the primary (first) metric result for variant exposure data
 	const primaryResult = metricResults[0]?.result;
-	console.log('[DEBUG] primaryResult keys:', primaryResult ? Object.keys(primaryResult) : 'null');
-	console.log('[DEBUG] primaryResult.baseline:', primaryResult?.baseline);
-	console.log('[DEBUG] primaryResult.variant_results:', primaryResult?.variant_results);
 
 	if (primaryResult) {
 		// Add baseline (control) variant
