@@ -52,6 +52,9 @@ interface VariantData {
 	success_count?: number;
 	failure_count?: number;
 	chance_to_win?: number | null;
+	// For mean metrics
+	sum?: number;
+	sum_squares?: number;
 }
 
 /**
@@ -185,11 +188,16 @@ function transformResults(metricResults: MetricResult[], experiment: Experiment)
 	if (primaryResult) {
 		// Add baseline (control) variant
 		if (primaryResult.baseline) {
+			// For mean metrics, use 'sum' field; for funnel metrics, use 'step_counts[0]'
+			const baselineCount = primaryResult.baseline.step_counts?.[0]
+				?? primaryResult.baseline.sum
+				?? primaryResult.baseline.success_count
+				?? 0;
 			allVariants.push({
 				key: primaryResult.baseline.key,
 				count: primaryResult.baseline.number_of_samples || 0,
 				absolute_exposure: primaryResult.baseline.number_of_samples || 0,
-				success_count: primaryResult.baseline.step_counts?.[0] || primaryResult.baseline.success_count,
+				success_count: baselineCount,
 				failure_count: primaryResult.baseline.failure_count
 			});
 		}
@@ -197,11 +205,16 @@ function transformResults(metricResults: MetricResult[], experiment: Experiment)
 		// Add other variants from variant_results array
 		if (primaryResult.variant_results) {
 			for (const variant of primaryResult.variant_results) {
+				// For mean metrics, use 'sum' field; for funnel metrics, use 'step_counts[0]'
+				const variantCount = variant.step_counts?.[0]
+					?? variant.sum
+					?? variant.success_count
+					?? 0;
 				allVariants.push({
 					key: variant.key,
 					count: variant.number_of_samples || 0,
 					absolute_exposure: variant.number_of_samples || 0,
-					success_count: variant.step_counts?.[0] || variant.success_count,
+					success_count: variantCount,
 					failure_count: variant.failure_count
 				});
 			}
@@ -228,19 +241,21 @@ function transformResults(metricResults: MetricResult[], experiment: Experiment)
 			// Baseline variant
 			...(result.baseline ? [{
 				key: result.baseline.key,
-				count: result.baseline.step_counts?.[0] || 0,
+				// For mean metrics, use 'sum' field; for funnel metrics, use 'step_counts[0]'
+				count: result.baseline.step_counts?.[0] ?? result.baseline.sum ?? 0,
 				exposure: result.baseline.number_of_samples || 0,
 				absolute_exposure: result.baseline.number_of_samples || 0,
-				success_count: result.baseline.step_counts?.[0] || result.baseline.success_count,
+				success_count: result.baseline.step_counts?.[0] ?? result.baseline.sum ?? result.baseline.success_count,
 				failure_count: result.baseline.failure_count
 			}] : []),
 			// Other variants
 			...(result.variant_results || []).map(v => ({
 				key: v.key,
-				count: v.step_counts?.[0] || 0,
+				// For mean metrics, use 'sum' field; for funnel metrics, use 'step_counts[0]'
+				count: v.step_counts?.[0] ?? v.sum ?? 0,
 				exposure: v.number_of_samples || 0,
 				absolute_exposure: v.number_of_samples || 0,
-				success_count: v.step_counts?.[0] || v.success_count,
+				success_count: v.step_counts?.[0] ?? v.sum ?? v.success_count,
 				failure_count: v.failure_count
 			}))
 		]
