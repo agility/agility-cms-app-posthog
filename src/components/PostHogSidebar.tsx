@@ -69,14 +69,19 @@ export const PostHogSidebar = ({ experimentKey, postHogAPIKey, postHogProjectId 
 
 			const data = await response.json();
 
+			// Debug: log the raw response
+			console.log('[DEBUG] Raw API response:', JSON.stringify(data, null, 2));
+
 			// Check if API returned "no results" indicator
 			if (data.noResults) {
+				console.log('[DEBUG] No results returned:', data.reason);
 				setResults(null);
 				return;
 			}
 
 			// Handle both formats: direct data or nested in 'result'
 			const resultsData = data.result || data;
+			console.log('[DEBUG] Setting results data:', JSON.stringify(resultsData, null, 2));
 			setResults(resultsData);
 		} catch (err) {
 			console.error('Error fetching results:', err);
