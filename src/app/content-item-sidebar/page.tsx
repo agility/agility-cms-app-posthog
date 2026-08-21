@@ -20,7 +20,7 @@ import { PostHogSidebar } from "@/components/PostHogSidebar"
 import { ContentAnalytics } from "@/components/ContentAnalytics"
 import Loader from "@/components/Loader"
 
-import { IAgilityContentItem } from "@/types/IAgilityContentItem"
+import { IAgilityContentItem, getFieldValue, resolveFieldName } from "@/types/IAgilityContentItem"
 
 const Page = () => {
 	// Get SDK context including the current content item and app configuration
@@ -28,7 +28,11 @@ const Page = () => {
 	const item = contentItem as IAgilityContentItem | null
 
 	// Track the experiment key from the content item's ExperimentKey field
-	const [experimentKey, setExperimentKey] = useState<string | null>(item?.values?.ExperimentKey || null)
+	// The field name is matched case-insensitively, since its casing comes from the content model
+	const experimentKeyFieldName = resolveFieldName(item?.values, "ExperimentKey") || "ExperimentKey"
+	const experimentKeyValue = getFieldValue(item?.values, "ExperimentKey")
+
+	const [experimentKey, setExperimentKey] = useState<string | null>(experimentKeyValue || null)
 	const [selectedTab, setSelectedTab] = useState(0)
 
 	// Extract PostHog configuration from app install settings
@@ -46,12 +50,11 @@ const Page = () => {
 	// Listen for changes to the ExperimentKey field in real-time
 	// This allows the sidebar to update when the user modifies the field
 	useEffect(() => {
-		const currentExperimentKey = item?.values?.ExperimentKey
-		setExperimentKey(currentExperimentKey || null)
+		setExperimentKey(experimentKeyValue || null)
 
 		// Register a field listener to detect changes to ExperimentKey
 		contentItemMethods.addFieldListener({
-			fieldName: "ExperimentKey",
+			fieldName: experimentKeyFieldName,
 			onChange: (value) => {
 				setExperimentKey(value || null)
 			}
@@ -59,10 +62,10 @@ const Page = () => {
 
 		// Cleanup listener on unmount
 		return () => {
-			contentItemMethods.removeFieldListener({ fieldName: "ExperimentKey" })
+			contentItemMethods.removeFieldListener({ fieldName: experimentKeyFieldName })
 		}
 
-	}, [postHogAPIKey, postHogProjectId, item?.values?.ExperimentKey])
+	}, [postHogAPIKey, postHogProjectId, experimentKeyValue, experimentKeyFieldName])
 
 	const hasExperiment = !!experimentKey
 	const hasConfig = !!postHogAPIKey && !!postHogProjectId

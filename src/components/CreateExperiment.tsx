@@ -1,6 +1,6 @@
 import { getManagementAPIToken, useAgilityAppSDK } from "@agility/app-sdk"
 import clsx from "clsx"
-import { IAgilityContentItem } from "@/types/IAgilityContentItem"
+import { IAgilityContentItem, getFieldValue } from "@/types/IAgilityContentItem"
 import { useState, useCallback, useEffect } from "react"
 import * as mgmtApi from "@agility/management-sdk"
 import { ListParams } from "@agility/management-sdk/dist/models/listParams"
@@ -184,7 +184,7 @@ export const CreateExperiment = ({ experimentKey, postHogProjectId, postHogAPIKe
 				return
 			}
 
-			const variantListReferenceName = item.values["Variants"]
+			const variantListReferenceName = getFieldValue(item.values, "Variants")
 
 			if (!variantListReferenceName) {
 				setErrorMsg("No variants found. Please create at least one variant before creating an experiment. Note: We are checking for a nested list in the 'Variants` field.")
