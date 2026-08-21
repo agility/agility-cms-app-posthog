@@ -1,5 +1,7 @@
 // Experiment configuration types for enhanced experiment creation
 
+import { getFieldValue } from "./IAgilityContentItem"
+
 export type MetricType = 'mean' | 'funnel' | 'ratio'
 
 export interface ExperimentMetric {
@@ -175,8 +177,8 @@ export function generateMetricId(): string {
 // Helper to extract variant key from Agility CMS content item
 // Handles both direct field access and array-wrapped items
 export function extractVariantKey(variantItem: Record<string, unknown>): string | null {
-	// Try direct field access (case-insensitive)
-	const variant = variantItem["Variant"] || variantItem["variant"]
+	// The field name is matched case-insensitively, since its casing comes from the content model
+	const variant = getFieldValue(variantItem, "Variant")
 	return typeof variant === 'string' ? variant : null
 }
 

@@ -1,5 +1,5 @@
 import clsx from "clsx"
-import { IAgilityContentItem } from "@/types/IAgilityContentItem"
+import { IAgilityContentItem, getFieldValue } from "@/types/IAgilityContentItem"
 import { useState, useCallback, useEffect } from "react"
 import * as mgmtApi from "@agility/management-sdk"
 import { ListParams } from "@agility/management-sdk/dist/models/listParams"
@@ -141,7 +141,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					return
 				}
 
-				const variantListReferenceName = item.values["Variants"]
+				const variantListReferenceName = getFieldValue(item.values, "Variants")
 
 				if (!variantListReferenceName) {
 					setVariantsError("No variants field found. Make sure this component has a 'Variants' nested content list.")
@@ -264,7 +264,7 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				return
 			}
 
-			const variantListReferenceName = item.values["Variants"]
+			const variantListReferenceName = getFieldValue(item.values, "Variants")
 
 			if (!variantListReferenceName) {
 				setErrorMsg("No variants found. Please create at least one variant before creating an experiment.")
