@@ -84,12 +84,19 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 
 	// Variant sync state
 	const [existingVariants, setExistingVariants] = useState<string[]>([])
-	const [showSyncOption, setShowSyncOption] = useState(false)
+	// True when a feature flag with this key already exists in PostHog. When it does,
+	// PostHog links the experiment to that flag as-is and rejects any flag config we send.
+	const [flagAlreadyExists, setFlagAlreadyExists] = useState(false)
 
 	// CMS variants state
 	const [cmsVariants, setCmsVariants] = useState<string[]>([])
 	const [variantsLoading, setVariantsLoading] = useState(true)
 	const [variantsError, setVariantsError] = useState<string | null>(null)
+
+	// CMS variants that the existing flag has no variant for — the site will never serve these
+	const variantsMissingFromFlag = existingVariants.length > 0
+		? cmsVariants.filter((variant) => !existingVariants.includes(variant))
+		: []
 
 	// Check for existing feature flag in PostHog
 	const checkExistingFeatureFlag = useCallback(async () => {
@@ -109,10 +116,13 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			if (response.ok) {
 				const data = await response.json()
 				const matchingFlag = data.results?.find((flag: { key: string }) => flag.key === experimentKey)
-				if (matchingFlag && matchingFlag.filters?.multivariate?.variants) {
-					const variants = matchingFlag.filters.multivariate.variants.map((v: { key: string }) => v.key)
-					setExistingVariants(variants)
-					setShowSyncOption(true)
+				if (matchingFlag) {
+					setFlagAlreadyExists(true)
+
+					if (matchingFlag.filters?.multivariate?.variants) {
+						const variants = matchingFlag.filters.multivariate.variants.map((v: { key: string }) => v.key)
+						setExistingVariants(variants)
+					}
 				}
 			}
 		} catch {
@@ -323,8 +333,13 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 			// Convert metrics to PostHog format
 			const postHogMetrics = finalMetrics.map(convertMetricToPostHogFormat)
 
-			// Build the experiment payload
-			const experimentPayload: PostHogExperimentPayload = {
+			// Build the experiment payload.
+			//
+			// When a feature flag with this key already exists, PostHog links the experiment to
+			// that flag as-is and rejects any flag config in the payload, so the variant split has
+			// to be left out. The flag keeps whatever variants and rollout it already has — change
+			// those on the flag itself in PostHog.
+			const buildPayload = (includeFlagConfig: boolean): PostHogExperimentPayload => ({
 				name: experimentName,
 				description: experimentDescription || `A/B test experiment for feature flag key: ${experimentKey}`,
 				feature_flag_key: experimentKey,
@@ -335,22 +350,35 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 				},
 				metrics: postHogMetrics,
 				parameters: {
-					feature_flag_variants: featureFlagVariants,
+					...(includeFlagConfig ? { feature_flag_variants: featureFlagVariants } : {}),
 					recommended_running_time: 0,
 					recommended_sample_size: 0,
 					minimum_detectable_effect: selectedTemplate?.minimum_detectable_effect || 30
 				}
-			}
+			})
+
+			const postExperiment = (includeFlagConfig: boolean) =>
+				fetch(`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${postHogAPIKey}`
+					},
+					body: JSON.stringify(buildPayload(includeFlagConfig))
+				})
 
 			// Create the experiment in PostHog
-			const response = await fetch(`https://app.posthog.com/api/projects/${postHogProjectId}/experiments/`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${postHogAPIKey}`
-				},
-				body: JSON.stringify(experimentPayload)
-			})
+			let response = await postExperiment(!flagAlreadyExists)
+
+			// The pre-flight flag lookup can miss (search paging, or a transient failure that was
+			// swallowed). If PostHog tells us the flag already exists, retry without the config.
+			if (response.status === 400 && !flagAlreadyExists) {
+				const conflict = await response.clone().json().catch(() => null)
+				if (typeof conflict?.detail === 'string' && conflict.detail.includes('already exists')) {
+					setFlagAlreadyExists(true)
+					response = await postExperiment(false)
+				}
+			}
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => null)
@@ -389,6 +417,56 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 	}
 
 	// Render template selection step
+	// A flag that already exists is normally a fault, not a reuse: either this component was
+	// copied from another that owns the key, or the key was typed to not match. Say so up front
+	// rather than letting the editor configure a whole experiment first.
+	const renderExistingFlagNotice = () => {
+		if (!flagAlreadyExists) return null
+
+		const hasMismatch = variantsMissingFromFlag.length > 0
+
+		return (
+			<div className={clsx(
+				"mx-6 mt-4 p-4 border rounded-lg",
+				hasMismatch ? "bg-red-50 border-red-200" : "bg-yellow-50 border-yellow-200"
+			)}>
+				<div className="flex items-start gap-3">
+					<svg
+						className={clsx("w-5 h-5 mt-0.5 shrink-0", hasMismatch ? "text-red-600" : "text-yellow-600")}
+						fill="none" stroke="currentColor" viewBox="0 0 24 24"
+					>
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+					</svg>
+					<div>
+						<p className={clsx("text-sm font-medium", hasMismatch ? "text-red-800" : "text-yellow-800")}>
+							A feature flag named <span className="font-mono">{experimentKey}</span> already exists
+						</p>
+						<p className={clsx("text-xs mt-1", hasMismatch ? "text-red-700" : "text-yellow-700")}>
+							Usually that means this component was copied from one that already owns the key, or the
+							Experiment Key does not match the flag you intended. Check that before continuing — two
+							components sharing a key share the same test.
+						</p>
+						<p className={clsx("text-xs mt-1", hasMismatch ? "text-red-700" : "text-yellow-700")}>
+							The experiment will link to that flag as-is and keep its existing variants and traffic split.
+							Nothing configured here changes the flag — edit it in PostHog instead.
+						</p>
+						{existingVariants.length > 0 && (
+							<p className={clsx("text-xs mt-1", hasMismatch ? "text-red-700" : "text-yellow-700")}>
+								Flag variants: {existingVariants.join(', ')}
+							</p>
+						)}
+						{hasMismatch && (
+							<p className="text-xs text-red-900 font-medium mt-1">
+								The flag has no variant for {variantsMissingFromFlag.join(', ')} — that CMS content can
+								never be served until the flag is updated to match.
+							</p>
+						)}
+					</div>
+				</div>
+			</div>
+		)
+	}
+
 	const renderTemplateStep = () => {
 		// Show loading state
 		if (variantsLoading) {
@@ -809,22 +887,6 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					</div>
 				</div>
 
-				{/* Sync existing variants notice */}
-				{showSyncOption && existingVariants.length > 0 && (
-					<div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-						<div className="flex items-start gap-3">
-							<svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-							</svg>
-							<div>
-								<p className="text-sm text-yellow-800 font-medium">Existing feature flag detected</p>
-								<p className="text-xs text-yellow-700 mt-1">
-									Found variants: {existingVariants.join(', ')}
-								</p>
-							</div>
-						</div>
-					</div>
-				)}
 			</div>
 		</div>
 	)
@@ -1052,6 +1114,8 @@ export const CreateExperimentModal = ({ experimentKey, postHogProjectId, postHog
 					</div>
 				))}
 			</div>
+
+			{renderExistingFlagNotice()}
 
 			{/* Step content */}
 			<div className="flex-1 overflow-hidden">
