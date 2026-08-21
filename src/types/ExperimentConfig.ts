@@ -73,7 +73,9 @@ export interface PostHogExperimentPayload {
 	}
 	metrics: PostHogMetric[]
 	parameters: {
-		feature_flag_variants: PostHogFeatureFlagVariant[]
+		// Omitted when the experiment links to a pre-existing feature flag — PostHog
+		// rejects flag config for a flag it did not create as part of the experiment.
+		feature_flag_variants?: PostHogFeatureFlagVariant[]
 		recommended_running_time: number
 		recommended_sample_size: number
 		minimum_detectable_effect: number
